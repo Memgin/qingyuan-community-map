@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS r2_project_usage (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  storage_bytes INTEGER NOT NULL DEFAULT 0,
+  class_a_ops INTEGER NOT NULL DEFAULT 0,
+  class_b_ops INTEGER NOT NULL DEFAULT 0
+);
+INSERT OR IGNORE INTO r2_project_usage (id) VALUES (1);

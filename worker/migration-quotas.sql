@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS r2_monthly_usage (
+  month TEXT PRIMARY KEY,
+  storage_bytes INTEGER NOT NULL DEFAULT 0,
+  class_a_ops INTEGER NOT NULL DEFAULT 0,
+  class_b_ops INTEGER NOT NULL DEFAULT 0
+);

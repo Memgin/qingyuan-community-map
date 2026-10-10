@@ -1,0 +1,16 @@
+node_modules/
+.wrangler/
+.wrangler/
+dist/
+build/
+
+# 本地环境变量与密钥（本项目的密钥全部存放在 Cloudflare Pages secrets，不入库）
+.env
+.env.*
+*.local
+
+# 日志与临时文件
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db

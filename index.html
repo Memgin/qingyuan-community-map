@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="清远社区共享地图：发现身边值得去的地方。">
+  <title>清远 · 社区共享地图</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="清远社区共享地图首页">
+        <span class="brand-mark">QY</span>
+        <span><strong>清远</strong><small>社区共享地图</small></span>
+      </a>
+      <div class="topbar-meta"><span class="status-dot"></span>正在收集本地好去处</div>
+      <div class="topbar-actions"><button class="auth-button" id="authButton" type="button">登录 / 注册</button><button class="share-button" id="shareButton" type="button"><span aria-hidden="true">↗</span> 分享地图</button></div>
+    </header>
+
+    <section class="intro-panel">
+      <p class="eyebrow">LOCAL / 01</p>
+      <h1>把清远的<br><em>好地方</em>交给大家。</h1>
+      <p class="intro-copy">从一顿热饭，到一条河边小路。这里是清远人的私藏地图。</p>
+      <button class="primary-button" id="addSpotButton" type="button"><span>+</span> 添加一个地点</button>
+      <div class="stats-row"><div><strong id="spotCount">8</strong><span>已收录点位</span></div><div><strong>6</strong><span>地点分类</span></div></div>
+    </section>
+
+    <section class="map-panel" aria-label="清远地图">
+      <div id="map"></div>
+      <div class="map-toolbar">
+        <button class="locate-button" id="locateButton" type="button" title="定位我的位置"><span>⌖</span><span class="sr-only">定位我的位置</span></button>
+        <div class="map-note"><span class="live-dot"></span> 社区实时地图</div>
+      </div>
+      <div class="map-legend"><span class="legend-title">探索分类</span><div id="categoryFilters" class="filter-list"></div></div>
+    </section>
+
+    <aside class="recent-panel">
+      <div class="section-heading"><div><p class="eyebrow">RECENT FINDS</p><h2>最近加入</h2></div><div class="list-actions"><label class="search-box"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="搜索地点" aria-label="搜索地点"></label><button id="mySpotsButton" class="text-button" type="button">我的提交</button></div></div>
+      <div id="spotList" class="spot-list"></div>
+      <div class="pagination"><button id="previousPageButton" class="page-button" type="button" aria-label="上一页">←</button><span id="pageInfo">1 / 1</span><button id="nextPageButton" class="page-button" type="button" aria-label="下一页">→</button></div>
+    </aside>
+
+    <section class="recommend-panel">
+      <div><p class="eyebrow">AI GUIDE / 02</p><h2>不知道去哪？问问清远。</h2><p>输入你的需求，推荐接口会从已审核点位中整理路线。</p></div>
+      <form id="recommendForm"><input id="recommendInput" type="text" placeholder="例如：周末想找一个安静的徒步地方" maxlength="120" required><button class="primary-button" type="submit">开始推荐 <span>→</span></button></form>
+      <p id="recommendResult" class="recommend-result" role="status"></p>
+    </section>
+    <section class="private-panel" id="privatePanel" hidden>
+      <div><p class="eyebrow">PRIVATE MAPS / 03</p><h2>我的私人地图</h2><p id="authStatus">登录后创建只属于你的地点清单。</p></div>
+      <form id="mapForm"><input name="name" type="text" placeholder="例如：周末带家人去" maxlength="40" required><button class="primary-button" type="submit">创建私人地图 <span>+</span></button></form>
+      <div id="privateMapList" class="private-map-list"></div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <button class="close-button" id="closeModalButton" type="button" aria-label="关闭">×</button>
+      <p class="eyebrow">NEW PLACE / 提交地点</p>
+      <h2 id="modalTitle">分享你的清远记忆</h2>
+      <p class="modal-intro">提交后会先进入待审核列表，审核通过才会出现在公开地图上。</p>
+      <form id="spotForm">
+        <label>地点名称<input name="name" type="text" placeholder="例如：北江边的日落位" maxlength="40" required></label>
+        <label>搜索地址或地点<input id="addressInput" name="address" type="search" placeholder="例如：清远站、飞来湖公园" required><button class="address-search-button" id="addressSearchButton" type="button">搜索并定位</button></label>
+        <p id="addressMessage" class="form-message" role="status"></p>
+        <label>地点分类<select name="category" required></select></label>
+        <label>一句话介绍<textarea name="description" rows="3" maxlength="120" placeholder="说说这里为什么值得来……" required></textarea></label>
+        <label>地点图片<input name="image" type="file" accept="image/jpeg,image/png,image/webp"><small class="field-note">可选，最大 2MB</small></label>
+        <input name="lat" type="hidden" value=""><input name="lng" type="hidden" value="">
+        <button class="map-pick-note" id="pickLocationButton" type="button">⌖ 在地图上选择坐标</button>
+        <button class="primary-button full-width" type="submit">提交，加入社区地图 <span>→</span></button>
+      </form>
+      <p class="form-message" id="formMessage" role="status"></p>
+    </section>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+
+  <div class="modal-backdrop" id="authBackdrop" hidden>
+    <section class="modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <button class="close-button" id="closeAuthButton" type="button" aria-label="关闭">×</button>
+      <p class="eyebrow">ACCOUNT / 账号</p><h2 id="authTitle">登录清远地图</h2>
+      <form id="authForm"><label>用户名<input name="username" type="text" minlength="2" maxlength="24" required></label><label>密码<input name="password" type="password" minlength="8" required></label><button class="primary-button full-width" type="submit"><span id="authSubmitText">登录</span> <span>→</span></button></form>
+      <button class="auth-switch" id="authSwitchButton" type="button">没有账号？注册一个</button><p class="form-message" id="authMessage" role="status"></p>
+    </section>
+  </div>
+
+  <script>window._AMapSecurityConfig = { securityJsCode: "23bdb3356d33258cc84de4c5ec773e5a" };</script>
+  <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
+  <script src="app.js?v=20261010-14"></script>
+</body>
+</html>

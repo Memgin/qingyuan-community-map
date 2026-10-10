@@ -1,0 +1,23 @@
+# 清远社区共享地图 —— Pages 一体化部署配置
+# 静态页面 + Pages Functions(/api/*) 同域部署在 https://qymap.pages.dev
+# 部署命令：npx wrangler pages deploy
+name = "qymap"
+pages_build_output_dir = "."
+compatibility_date = "2026-09-04"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "qingyuan-community-map"
+database_id = "5a799ddf-cff5-47ae-9564-f31e998c255b"
+
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "qingyuan-community-map-images"
+
+[vars]
+ALLOWED_ORIGIN = "https://qymap.pages.dev"
+# 敏感配置请用 secret 设置（不要写在这里）：
+#   npx wrangler secret put ADMIN_TOKEN
+#   npx wrangler secret put AMAP_WEB_KEY
+#   npx wrangler secret put AI_API_URL
+#   npx wrangler secret put AI_API_KEY

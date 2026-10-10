@@ -1,0 +1,1 @@
+ALTER TABLE spots ADD COLUMN address TEXT;

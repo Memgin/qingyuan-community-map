@@ -1,0 +1,20 @@
+name = "qingyuan-community-map-api"
+main = "src/index.js"
+compatibility_date = "2026-09-04"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "qingyuan-community-map"
+database_id = "5a799ddf-cff5-47ae-9564-f31e998c255b"
+
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "qingyuan-community-map-images"
+
+[vars]
+ALLOWED_ORIGIN = "https://qymap.pages.dev"
+# Set with: wrangler secret put AMAP_WEB_KEY
+# The key must enable AMap Web Service / Place Search.
+# Set with: wrangler secret put ADMIN_TOKEN
+# Optional AI proxy settings: wrangler secret put AI_API_KEY
+# Optional AI endpoint: wrangler secret put AI_API_URL
