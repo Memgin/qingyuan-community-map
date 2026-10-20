@@ -4,17 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>清远地图 · 内容审核</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=20261020-1">
   <style>
-    body { padding: 30px; } .admin-shell { max-width: 980px; margin: auto; } .admin-head { display: flex; justify-content: space-between; align-items: end; margin-bottom: 24px; } .admin-head h1 { margin: 0; font-family: "Noto Serif SC", serif; } .token-row { display: flex; gap: 10px; margin-bottom: 20px; } .token-row input { max-width: 360px; margin: 0; } .admin-card { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; border: 1px solid var(--line); padding: 18px; margin-bottom: 10px; background: var(--panel); } .admin-card h2 { margin: 0 0 6px; font-family: "Noto Serif SC", serif; font-size: 18px; } .admin-card p { margin: 0; color: var(--muted); font-size: 12px; } .admin-actions { display: flex; gap: 8px; } .admin-actions button { border: 0; padding: 10px 13px; color: white; font-size: 11px; font-weight: 700; } .approve { background: var(--green); } .reject { background: var(--coral); } #adminMessage { color: var(--green); font-size: 12px; }
+    body { padding: 30px; } .admin-shell { max-width: 980px; margin: auto; } .admin-head { display: flex; justify-content: space-between; align-items: end; margin-bottom: 24px; } .admin-head h1 { margin: 0; font-family: "Noto Serif SC", serif; } .token-row { display: flex; gap: 10px; margin-bottom: 20px; } .token-row input { max-width: 360px; margin: 0; } .admin-card { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; border: 1px solid var(--line); padding: 18px; margin-bottom: 10px; background: var(--panel); } .admin-card h2 { margin: 0 0 6px; font-family: "Noto Serif SC", serif; font-size: 18px; } .admin-card p { margin: 0; color: var(--muted); font-size: 12px; } .admin-actions { display: flex; gap: 8px; } .admin-actions button { border: 0; padding: 10px 13px; color: white; font-size: 11px; font-weight: 700; } .approve { background: var(--green); } .reject { background: var(--coral); } .delete { background: #7a2f2f; } .admin-card h2 small { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 6px; } #adminMessage { color: var(--green); font-size: 12px; } pre { background: var(--panel); border: 1px solid var(--line); padding: 12px; font-size: 12px; overflow-x: auto; }
   </style>
 </head>
 <body>
   <main class="admin-shell">
     <header class="admin-head"><div><p class="eyebrow">ADMIN / MODERATION</p><h1>地点审核</h1></div><a class="text-button" href="./">返回地图 →</a></header>
     <div class="token-row"><input id="adminToken" type="password" placeholder="输入 ADMIN_TOKEN"><button class="primary-button" id="loadButton" type="button">加载待审核</button></div>
-    <p id="adminMessage" role="status"></p><section id="pendingList"></section><h2>待处理举报</h2><section id="reportList"></section>
+    <p id="adminMessage" role="status"></p><section id="pendingList"></section>
+    <h2>点位管理（可删除违规内容）</h2>
+    <div class="token-row"><input id="spotSearch" type="text" placeholder="按名称或地址搜索，留空显示全部"><select id="statusFilter"><option value="">全部状态</option><option value="approved">已上线</option><option value="pending">待审核</option><option value="rejected">已下架</option></select><button class="primary-button" id="loadSpotsButton" type="button">加载点位</button></div>
+    <section id="allSpotsList"></section>
+    <h2>高德自动核验自检</h2>
+    <div class="token-row"><button class="primary-button" id="amapCheckButton" type="button">检查高德接口</button></div>
+    <pre id="amapCheckResult">点击上方按钮，查看高德 REST 接口的返回状态（不会显示 Key）。</pre>
+    <h2>待处理举报</h2><section id="reportList"></section>
   </main>
-  <script src="admin.js?v=20260904-2"></script>
+  <script src="admin.js?v=20261020-2"></script>
 </body>
 </html>
