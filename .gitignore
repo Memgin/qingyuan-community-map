@@ -9,6 +9,9 @@ build/
 .env.*
 *.local
 
+# 鸿蒙 App 工程（暂不公开，本地开发用）
+qymap-harmony/
+
 # 日志与临时文件
 *.log
 npm-debug.log*

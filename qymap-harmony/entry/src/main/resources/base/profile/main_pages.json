@@ -1,9 +1,0 @@
-{
-  "src": [
-    "pages/Index",
-    "pages/SpotDetailPage",
-    "pages/SubmitPage",
-    "pages/LoginPage",
-    "pages/PrivateMapPage"
-  ]
-}
