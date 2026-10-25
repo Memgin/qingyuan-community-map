@@ -25,6 +25,7 @@
 - **点赞 / 举报**：登录用户按账号记录，网页端与 App 状态一致
 - **私人地图收藏**：把喜欢的点位收进自己的地图
 - **我的提交**：查看自己提交的点位及其审核状态
+- **位置纠偏**：发现点位坐标偏了？登录后在地图弹窗点「位置纠偏」，把蓝色标记拖到正确位置提交，管理员确认后全端生效
 
 ### 账号与安全
 - **注册 / 登录**：用户名 + 密码，PBKDF2 加盐哈希存储；注册需通过 Turnstile 人机验证（未启用时走免验证限额）
@@ -46,12 +47,13 @@
 - 接入智谱 `glm-4.7-flash`，主模型限流时自动降级到备用模型，25 秒超时保护
 
 ### 管理后台
-标签页布局，五个板块，密钥在会话内自动记忆：
+标签页布局，六个板块，密钥在会话内自动记忆：
 - **① 待审核点位**：通过 / 拒绝
 - **② 全部点位**：按名称搜索、按状态筛选、删除违规内容（级联清理点赞 / 举报 / 收藏）
 - **③ 举报处理**
 - **④ 账号与密码**：密码重置申请审批（一键同意并推送临时密码；无法安全送达的可删除转人工）、手动重置密码
-- **⑤ 诊断工具**：高德接口自检（不暴露 Key）
+- **⑤ 位置纠偏**：审批用户提交的坐标修正（新旧坐标对照，同意即移动点位）
+- **⑥ 诊断工具**：高德接口自检（不暴露 Key）
 
 ### 多端同步与离线能力
 | 能力 | 说明 |
@@ -125,7 +127,7 @@ npx wrangler pages secret put PUSH_CLIENT_SECRET # 华为推送 Client Secret
 npx wrangler d1 execute qingyuan-community-map --remote --file=worker/schema.sql
 ```
 
-按 `worker/` 下的迁移脚本顺序依次执行（auth → owner → moderation → quotas → category-school …）。根目录迁移脚本按文件名时间顺序执行，最新一批：`migration-security.sql`（登录防护/会话）、`migration-registration.sql`（注册限额）、`migration-pwd-flow.sql`（密码重置申请与强制改密）、`migration-push.sql`（推送 Token）、`migration-photos.sql`（点位配图）。
+按 `worker/` 下的迁移脚本顺序依次执行（auth → owner → moderation → quotas → category-school …）。根目录迁移脚本按文件名时间顺序执行，最新一批：`migration-security.sql`（登录防护/会话）、`migration-registration.sql`（注册限额）、`migration-pwd-flow.sql`（密码重置申请与强制改密）、`migration-push.sql`（推送 Token）、`migration-photos.sql`（点位配图）、`migration-correction.sql`（位置纠偏）。
 
 ### 4. 部署
 
@@ -148,6 +150,7 @@ npx wrangler pages deploy . --project-name qymap --branch main
 | DELETE | `/spots/:id` | 删除自己提交的点位 |
 | POST | `/spots/:id/like` | 点赞（登录时按账号记录） |
 | POST | `/spots/:id/report` | 举报 |
+| POST | `/spots/:id/correction` | 位置纠偏（需登录，提交坐标修正建议） |
 | GET | `/my-spots` | 我提交的点位 |
 
 ### 用户
@@ -176,6 +179,8 @@ npx wrangler pages deploy . --project-name qymap --branch main
 | POST | `/admin/reset-requests/:id/handle` | 管理：同意申请（重置 + 推送临时密码 + 踢会话） |
 | DELETE | `/admin/reset-requests/:id` | 管理：驳回/删除申请（软删除留痕） |
 | POST | `/admin/users/reset-password` | 管理：手动重置指定用户密码为 12345 |
+| GET | `/admin/corrections` | 管理：待审核位置纠偏列表 |
+| POST | `/admin/corrections/:id/handle` | 管理：同意（移动点位）/ 驳回纠偏 |
 
 管理类接口需请求头 `Authorization: Bearer <ADMIN_TOKEN>`。
 
@@ -186,9 +191,11 @@ npx wrangler pages deploy . --project-name qymap --branch main
 ```
 .
 ├── index.html          前端主页
+├── all.html            全部地点页（网格浏览）
 ├── app.js              前端逻辑（地图、列表、提交、同步）
 ├── admin.html          管理后台页面
 ├── admin.js            管理后台逻辑
+├── favicon.svg         网站图标（清远山水）
 ├── style.css           样式
 ├── functions/          Cloudflare Pages Functions
 │   ├── api/[[path]].js 路由入口

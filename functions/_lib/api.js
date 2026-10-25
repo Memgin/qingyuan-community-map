@@ -84,6 +84,12 @@ async function dispatch(request, env) {
     // 删除（驳回）申请：软删除，状态改为 dismissed，保留审计痕迹
     const dismissMatch = url.pathname.match(/^\/api\/admin\/reset-requests\/(\d+)$/);
     if (dismissMatch && request.method === "DELETE") return dismissResetRequest(request, env, Number(dismissMatch[1]));
+    // 位置纠偏：登录用户提交坐标修正建议，管理员确认后生效
+    const correctionMatch = url.pathname.match(/^\/api\/spots\/(\d+)\/correction$/);
+    if (correctionMatch && request.method === "POST") return submitCorrection(request, env, Number(correctionMatch[1]));
+    if (url.pathname === "/api/admin/corrections" && request.method === "GET") return listCorrections(request, env);
+    const correctionHandleMatch = url.pathname.match(/^\/api\/admin\/corrections\/(\d+)\/handle$/);
+    if (correctionHandleMatch && request.method === "POST") return handleCorrection(request, env, Number(correctionHandleMatch[1]));
     if (url.pathname === "/api/admin/amap-check" && request.method === "GET") return amapCheck(request, env);
     if (url.pathname === "/api/recommend" && request.method === "POST") return recommend(request, env);
     return json({ error: "Not found" }, 404, env);
@@ -307,6 +313,53 @@ async function dismissResetRequest(request, env, id) {
   const result = await env.DB.prepare("UPDATE password_reset_requests SET status = 'dismissed' WHERE id = ? AND status = 'pending'").bind(id).run();
   if (!result.meta.changes) return json({ error: "记录不存在或已处理" }, 404, env);
   return json({ id, dismissed: true }, 200, env);
+}
+
+// ---------------- 位置纠偏 ----------------
+
+// 提交纠偏：登录用户每对一个点位只能有一条待审核纠偏
+async function submitCorrection(request, env, spotId) {
+  const user = await authenticatedUser(request, env);
+  if (!user) return json({ error: "请先登录后再提交纠偏" }, 401, env);
+  const spot = await env.DB.prepare("SELECT id, lat, lng FROM spots WHERE id = ? AND status != 'rejected'").bind(spotId).first();
+  if (!spot) return json({ error: "点位不存在" }, 404, env);
+  const body = await request.json().catch(() => null);
+  const lat = Number(body?.lat);
+  const lng = Number(body?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    return json({ error: "坐标无效" }, 400, env);
+  }
+  // 与原位置几乎相同则无意义
+  if (Math.abs(spot.lat - lat) < 0.00005 && Math.abs(spot.lng - lng) < 0.00005) {
+    return json({ error: "新位置与当前位置相同" }, 400, env);
+  }
+  const dup = await env.DB.prepare("SELECT id FROM spot_corrections WHERE spot_id = ? AND user_id = ? AND status = 'pending'").bind(spotId, user.id).first();
+  if (dup) return json({ error: "你已有一条该点位的纠偏待审核" }, 409, env);
+  await env.DB.prepare("INSERT INTO spot_corrections (spot_id, user_id, lat, lng) VALUES (?, ?, ?, ?)").bind(spotId, user.id, lat, lng).run();
+  return json({ submitted: true, message: "纠偏已提交，等待管理员确认" }, 200, env);
+}
+
+// 管理员：待审核纠偏列表（带点位当前坐标与提交人）
+async function listCorrections(request, env) {
+  if (!authorized(request, env)) return json({ error: "未授权" }, 401, env);
+  const rows = await env.DB.prepare(`SELECT c.id, c.spot_id, c.lat AS new_lat, c.lng AS new_lng, c.created_at, s.name, s.address, s.lat AS old_lat, s.lng AS old_lng, u.username
+    FROM spot_corrections c JOIN spots s ON s.id = c.spot_id LEFT JOIN users u ON u.id = c.user_id
+    WHERE c.status = 'pending' ORDER BY c.id DESC LIMIT 100`).all();
+  return json({ data: rows.results || [] }, 200, env);
+}
+
+// 管理员审批：同意则把点位坐标更新为纠偏坐标，驳回仅记录
+async function handleCorrection(request, env, id) {
+  if (!authorized(request, env)) return json({ error: "未授权" }, 401, env);
+  const body = await request.json().catch(() => ({}));
+  const action = body.action === "reject" ? "rejected" : "applied";
+  const corr = await env.DB.prepare("SELECT * FROM spot_corrections WHERE id = ? AND status = 'pending'").bind(id).first();
+  if (!corr) return json({ error: "纠偏不存在或已处理" }, 404, env);
+  if (action === "applied") {
+    await env.DB.prepare("UPDATE spots SET lat = ?, lng = ?, updated_at = datetime('now') WHERE id = ?").bind(corr.lat, corr.lng, corr.spot_id).run();
+  }
+  await env.DB.prepare("UPDATE spot_corrections SET status = ? WHERE id = ?").bind(action, id).run();
+  return json({ applied: action === "applied" }, 200, env);
 }
 
 async function currentUser(request, env) {

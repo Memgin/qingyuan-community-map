@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- 底：清远地图主题深绿 -->
+  <rect width="64" height="64" rx="14" fill="#2F6D5A"/>
+  <!-- 北江晨曦：橙日 -->
+  <circle cx="46" cy="15" r="5.5" fill="#EB765E"/>
+  <!-- 笔架群山：双峰轮廓 -->
+  <path d="M8 40 L23 19 L33 31 L41 23 L56 40 Z" fill="#F4F3ED"/>
+  <!-- 北江水：两道波纹 -->
+  <path d="M9 47 q5.5 -5 11 0 t11 0 t11 0 t11 0" stroke="#8FBCAE" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+  <path d="M15 55 q5.5 -5 11 0 t11 0 t11 0" stroke="#F4F3ED" stroke-width="4.5" fill="none" stroke-linecap="round" opacity=".9"/>
+</svg>

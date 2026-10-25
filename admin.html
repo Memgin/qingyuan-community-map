@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>清远地图 · 管理后台</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="style.css?v=20261025-7">
   <style>
     body { padding: 30px; }
@@ -49,7 +50,8 @@
       <button class="admin-tab" data-tab="spots" type="button">② 全部点位</button>
       <button class="admin-tab" data-tab="reports" type="button">③ 举报处理</button>
       <button class="admin-tab" data-tab="account" type="button">④ 账号与密码</button>
-      <button class="admin-tab" data-tab="tools" type="button">⑤ 诊断工具</button>
+      <button class="admin-tab" data-tab="corrections" type="button">⑤ 位置纠偏</button>
+      <button class="admin-tab" data-tab="tools" type="button">⑥ 诊断工具</button>
     </nav>
 
     <section class="admin-panel" id="panel-pending">
@@ -82,6 +84,13 @@
       <pre id="resetResult">重置后流程：临时密码 12345 → 用户登录 → 系统强制要求设置新密码。</pre>
     </section>
 
+    <section class="admin-panel" id="panel-corrections" hidden>
+      <h2>位置纠偏（用户提交）</h2>
+      <p class="panel-desc">用户在地图上拖动标记修正偏差的点位坐标。「同意」即把点位移到新位置；拿不准时可对照新旧坐标在高德地图核查。</p>
+      <div class="panel-tools"><button class="primary-button" id="loadCorrectionsButton" type="button">加载纠偏申请</button></div>
+      <section id="correctionList"></section>
+    </section>
+
     <section class="admin-panel" id="panel-tools" hidden>
       <h2>高德接口自检</h2>
       <p class="panel-desc">排查地图搜索、坐标核验异常时使用：查看高德 REST 接口返回状态（不会显示 Key）。</p>
@@ -90,6 +99,6 @@
     </section>
   </main>
   <div class="toast" id="adminToast"></div>
-  <script src="admin.js?v=20261025-6"></script>
+  <script src="admin.js?v=20261025-7"></script>
 </body>
 </html>

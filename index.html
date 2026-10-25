@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="清远社区共享地图：发现身边值得去的地方。">
   <title>清远 · 社区共享地图</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261025-7">
+  <link rel="stylesheet" href="style.css?v=20261025-8">
 </head>
 <body>
   <main class="app-shell">
@@ -101,6 +102,11 @@
     </section>
   </div>
   <div class="toast" id="toast" role="status"></div>
+  <div class="correction-bar" id="correctionBar" hidden>
+    <span class="correction-hint">拖动蓝色标记到正确位置后提交</span>
+    <button class="primary-button" id="correctionSubmit" type="button">提交纠偏</button>
+    <button class="text-button" id="correctionCancel" type="button">取消</button>
+  </div>
 
   <div class="modal-backdrop" id="authBackdrop" hidden>
     <section class="modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
@@ -131,6 +137,6 @@
 
   <script>window._AMapSecurityConfig = { securityJsCode: "23bdb3356d33258cc84de4c5ec773e5a" };</script>
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
-  <script src="app.js?v=20261025-15"></script>
+  <script src="app.js?v=20261025-16"></script>
 </body>
 </html>

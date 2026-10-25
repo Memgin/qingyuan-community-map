@@ -16,6 +16,73 @@ const AUTH_TOKEN_KEY = "qingyuan-auth-token";
 const ACTOR_TOKEN_KEY = "qingyuan-actor-token";
 
 const map = new AMap.Map("map", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D", mapStyle: "amap://styles/normal" });
+
+// ---------------- 位置纠偏：拖动标记修正点位位置，提交后转管理员确认 ----------------
+let correctionContext = null;
+const correctionBar = document.querySelector("#correctionBar");
+
+function enterCorrectionMode(spot) {
+  if (!state.currentUser) {
+    showToast("请先登录后再提交纠偏");
+    openAuth();
+    return;
+  }
+  if (correctionContext) exitCorrectionMode();
+  const marker = new AMap.Marker({
+    position: [spot.lng, spot.lat],
+    content: '<div class="correction-marker"></div>',
+    offset: new AMap.Pixel(-13, -26),
+    draggable: true,
+    zIndex: 1300
+  });
+  map.add(marker);
+  correctionContext = { spotId: spot.id, marker, lat: spot.lat, lng: spot.lng };
+  marker.on("dragend", () => {
+    const position = marker.getPosition();
+    correctionContext.lat = position.getLat();
+    correctionContext.lng = position.getLng();
+  });
+  map.setZoomAndCenter(16, [spot.lng, spot.lat]);
+  correctionBar.hidden = false;
+}
+
+function exitCorrectionMode() {
+  if (correctionContext) {
+    map.remove(correctionContext.marker);
+    correctionContext = null;
+  }
+  correctionBar.hidden = true;
+}
+
+// InfoWindow 内容是字符串模板，用事件委托接「位置纠偏」点击
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-correct-id]");
+  if (!button) return;
+  const spot = state.mapSpots.find((item) => String(item.id) === button.dataset.correctId);
+  if (spot) enterCorrectionMode(spot);
+});
+
+document.querySelector("#correctionSubmit").addEventListener("click", async () => {
+  if (!correctionContext) return;
+  const submitButton = document.querySelector("#correctionSubmit");
+  submitButton.disabled = true;
+  try {
+    const response = await fetch(`${API_BASE}/spots/${correctionContext.spotId}/correction`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ lat: correctionContext.lat, lng: correctionContext.lng })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "提交失败");
+    showToast(payload.message || "纠偏已提交");
+    exitCorrectionMode();
+  } catch (error) {
+    showToast(error.message);
+  }
+  submitButton.disabled = false;
+});
+
+document.querySelector("#correctionCancel").addEventListener("click", exitCorrectionMode);
 let currentLocationMarker = null;
 
 const state = { spots: [], mapSpots: [], total: 0, filter: "all", query: "", page: 1, pageSize: 4, markers: [], likes: getLikes(), pickingLocation: false, myOnly: false, currentUser: null, authMode: "login", highlightIds: new Set() };
@@ -443,7 +510,7 @@ function renderMarkers() {
       const address = escapeHTML(spot.address || "地图上的目的地");
       // 地图图钉是轻量数据（fields=map），description 可能为空，必须兜底
       const description = escapeHTML(spot.description || "");
-      const base = `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small><a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${address} · 导航</a><p>${description}</p><div class="popup-wall"><span class="field-note">照片加载中…</span></div></div>`;
+      const base = `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small><a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button">📍 位置纠偏</button><p>${description}</p><div class="popup-wall"><span class="field-note">照片加载中…</span></div></div>`;
       const infoWindow = new AMap.InfoWindow({ content: base, offset: new AMap.Pixel(0, -35), closeWhenClickMap: true });
       infoWindow.open(map, marker.getPosition());
       // 照片墙异步补充：不阻塞弹窗打开，取到后整体重设内容（导航与分类保留在模板里）
@@ -466,7 +533,7 @@ async function loadPopupWall(spot, infoWindow) {
     const wall = photos.length
       ? `<div class="popup-wall">${photos.slice(0, 6).map((photo) => `<figure class="popup-wall-item"><img src="${escapeHTML(photo.url)}" alt="社区照片"><figcaption>${escapeHTML(photo.username || "社区成员")}</figcaption></figure>`).join("")}</div>`
       : `<div class="popup-wall"><span class="field-note">暂无社区照片</span></div>`;
-    const content = `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small><a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${address} · 导航</a><p>${description}</p>${wall}</div>`;
+    const content = `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small><a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button">📍 位置纠偏</button><p>${description}</p>${wall}</div>`;
     infoWindow.setContent(content);
   } catch {
     // 照片加载失败时保留"加载中"占位，不影响基础信息展示

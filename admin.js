@@ -31,6 +31,35 @@ const savedAdminToken = sessionStorage.getItem(ADMIN_TOKEN_KEY);
 if (savedAdminToken && !tokenInput.value) tokenInput.value = savedAdminToken;
 tokenInput.addEventListener("change", () => sessionStorage.setItem(ADMIN_TOKEN_KEY, tokenInput.value.trim()));
 
+// ---------------- 位置纠偏：列表与审批 ----------------
+const correctionList = document.querySelector("#correctionList");
+const loadCorrectionsButton = document.querySelector("#loadCorrectionsButton");
+
+loadCorrectionsButton.addEventListener("click", loadCorrections);
+
+async function loadCorrections() {
+  correctionList.textContent = "加载中……";
+  try {
+    const payload = await request("/admin/corrections");
+    const corrections = payload.data || [];
+    if (!corrections.length) { correctionList.textContent = "暂无待审核的纠偏申请。"; return; }
+    correctionList.innerHTML = corrections.map((item) => `<div class="admin-card"><div><h2>${item.name} <small>#${item.spot_id} · ${item.username || "匿名用户"}</small></h2><p>当前：${item.old_lat}, ${item.old_lng}<br>纠偏至：${item.new_lat}, ${item.new_lng}<br>${item.address || ""} · ${item.created_at}</p></div><div class="admin-actions"><button class="approve" data-correction-id="${item.id}" data-action="apply" type="button">同意移动</button><button class="reject" data-correction-id="${item.id}" data-action="reject" type="button">驳回</button></div></div>`).join("");
+    correctionList.querySelectorAll("[data-correction-id]").forEach((button) => button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await request(`/admin/corrections/${button.dataset.correctionId}/handle`, { method: "POST", body: JSON.stringify({ action: button.dataset.action }) });
+        showToast(button.dataset.action === "apply" ? "已移动点位" : "已驳回纠偏");
+        loadCorrections();
+      } catch (error) {
+        showToast(error.message);
+        button.disabled = false;
+      }
+    }));
+  } catch (error) {
+    correctionList.textContent = error.message;
+  }
+}
+
 // ---------------- 密码重置申请：列表与审批 ----------------
 const resetRequestList = document.querySelector("#resetRequestList");
 const loadResetRequestsButton = document.querySelector("#loadResetRequestsButton");
