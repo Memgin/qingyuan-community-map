@@ -137,7 +137,8 @@ async function createSpot(request, env) {
     const existing = await env.DB.prepare("SELECT id, status FROM spots WHERE client_token = ?").bind(clientToken).first();
     if (existing) return json({ id: existing.id, status: existing.status, duplicated: true, message: "该提交已存在，已跳过重复写入" }, 200, env);
   }
-  const duplicate = await env.DB.prepare("SELECT id FROM spots WHERE category = ? AND status != 'rejected' AND (lower(name) = lower(?) OR (abs(lat - ?) < 0.001 AND abs(lng - ?) < 0.001)) LIMIT 1")
+  // 坐标去重阈值 0.0002 度（约 22 米）：避免同一条美食街/同一栋楼里的不同店铺被误判重复
+  const duplicate = await env.DB.prepare("SELECT id FROM spots WHERE category = ? AND status != 'rejected' AND (lower(name) = lower(?) OR (abs(lat - ?) < 0.0002 AND abs(lng - ?) < 0.0002)) LIMIT 1")
     .bind(spot.value.category, spot.value.name, spot.value.lat, spot.value.lng).first();
   if (duplicate) return json({ error: "这个地点已经收录，无需重复提交" }, 409, env);
   const verification = await verifyWithAmap(spot.value, env);
