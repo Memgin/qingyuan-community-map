@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261020-3">
+  <link rel="stylesheet" href="style.css?v=20261025-7">
 </head>
 <body>
   <main class="app-shell">
@@ -39,7 +39,7 @@
     </section>
 
     <aside class="recent-panel">
-      <div class="section-heading"><div><p class="eyebrow">RECENT FINDS</p><h2>最近加入</h2></div><div class="list-actions"><label class="search-box"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="搜索地点" aria-label="搜索地点"></label><button id="mySpotsButton" class="text-button" type="button">我的提交</button></div></div>
+      <div class="section-heading"><div><p class="eyebrow">RECENT FINDS</p><h2>最近加入</h2></div><div class="list-actions"><label class="search-box"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="搜索地点" aria-label="搜索地点"></label><a class="text-button" href="all.html">全部地点 →</a><button id="mySpotsButton" class="text-button" type="button">我的提交</button></div></div>
       <div id="spotList" class="spot-list"></div>
       <div class="pagination"><button id="previousPageButton" class="page-button" type="button" aria-label="上一页">←</button><span id="pageInfo">1 / 1</span><button id="nextPageButton" class="page-button" type="button" aria-label="下一页">→</button></div>
     </aside>
@@ -55,6 +55,30 @@
       <div id="privateMapList" class="private-map-list"></div>
     </section>
   </main>
+
+  <div class="modal-backdrop" id="editBackdrop" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+      <button class="close-button" id="closeEditButton" type="button" aria-label="关闭">×</button>
+      <p class="eyebrow">EDIT SPOT / 编辑地点</p>
+      <h2 id="editTitle">编辑地点</h2>
+      <p class="modal-intro">地点名称与地址不可修改，只能调整分类与配图，保存后立即生效。</p>
+      <form id="editForm">
+        <div id="editWallSection">
+          <label>社区照片（追加式，不会覆盖他人的图）</label>
+          <div id="editWallList" class="wall-list"></div>
+          <label>添加一张照片<input type="file" name="wallImage" accept="image/*" id="editWallImage"></label>
+          <button class="address-search-button" type="button" id="addWallPhotoButton">上传补充照片</button>
+        </div>
+        <div id="ownerEditSection" hidden>
+          <label>地点分类<select name="category" id="editCategory"></select></label>
+          <label>更换主图<input type="file" name="image" accept="image/*" id="editImage"></label>
+          <p class="field-note" id="editImageNote"></p>
+          <button class="primary-button full-width" type="submit">保存修改</button>
+          <p class="form-message" id="editMessage"></p>
+        </div>
+      </form>
+    </section>
+  </div>
 
   <div class="modal-backdrop" id="modalBackdrop" hidden>
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -82,13 +106,31 @@
     <section class="modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
       <button class="close-button" id="closeAuthButton" type="button" aria-label="关闭">×</button>
       <p class="eyebrow">ACCOUNT / 账号</p><h2 id="authTitle">登录清远地图</h2>
-      <form id="authForm"><label>用户名<input name="username" type="text" minlength="2" maxlength="24" required></label><label>密码<input name="password" type="password" minlength="8" required></label><button class="primary-button full-width" type="submit"><span id="authSubmitText">登录</span> <span>→</span></button></form>
-      <button class="auth-switch" id="authSwitchButton" type="button">没有账号？注册一个</button><p class="form-message" id="authMessage" role="status"></p>
+      <form id="authForm"><label>用户名<input name="username" type="text" minlength="2" maxlength="24" required></label><label>密码<input name="password" type="password" id="authPassword" required></label><div id="turnstileBox"></div><button class="primary-button full-width" type="submit"><span id="authSubmitText">登录</span> <span>→</span></button></form>
+      <button class="auth-switch" id="authSwitchButton" type="button">没有账号？注册一个</button><button class="auth-switch" id="forgotPasswordButton" type="button">忘记密码？</button><p class="form-message" id="authMessage" role="status"></p>
+
+      <section id="forgotPanel" hidden>
+        <p class="modal-intro">提交后等待管理员审核。审核通过后你的临时密码为 <strong>12345</strong>，用它登录时系统会要求你立即设置新密码。</p>
+        <form id="forgotForm"><label>你的用户名<input id="forgotUsername" type="text" required maxlength="24"></label><label>补充说明（可选）<input id="forgotNote" type="text" maxlength="200" placeholder="例如：注册时间、常用地点，方便管理员确认身份"></label><button class="primary-button full-width" type="submit" id="forgotSubmitButton">提交申请</button><p class="form-message" id="forgotMessage" role="status"></p><button class="auth-switch" id="forgotBackButton" type="button">← 返回登录</button></form>
+      </section>
     </section>
   </div>
 
+  <div class="modal-backdrop" id="forceChangeBackdrop" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="forceChangeTitle">
+        <p class="eyebrow">SECURITY / 安全设置</p>
+        <h2 id="forceChangeTitle">设置新密码</h2>
+        <p class="modal-intro">当前使用的是临时密码，设置新密码后才能继续使用各项功能。</p>
+        <form id="forceChangeForm">
+          <label>新密码（至少 8 位，需包含字母和数字）<input type="password" id="forceNewPassword" required minlength="8" maxlength="128"></label>
+          <button class="primary-button full-width" type="submit">保存并继续</button>
+          <p class="form-message" id="forceChangeMessage" role="status"></p>
+        </form>
+      </section>
+    </div>
+
   <script>window._AMapSecurityConfig = { securityJsCode: "23bdb3356d33258cc84de4c5ec773e5a" };</script>
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
-  <script src="app.js?v=20261020-2"></script>
+  <script src="app.js?v=20261025-15"></script>
 </body>
 </html>

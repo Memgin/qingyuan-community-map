@@ -8,6 +8,90 @@ const statusFilter = document.querySelector("#statusFilter");
 const message = document.querySelector("#adminMessage");
 const STATUS_LABELS = { pending: "待审核", approved: "已上线", rejected: "已下架" };
 
+// 轻量提示条（admin 页面独立于主页脚本，需自带 showToast）
+let toastTimer = null;
+function showToast(message) {
+  const toast = document.querySelector("#adminToast");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add("visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("visible"), 3200);
+}
+
+// ---------------- 标签页切换 ----------------
+document.querySelectorAll(".admin-tab").forEach((tab) => tab.addEventListener("click", () => {
+  document.querySelectorAll(".admin-tab").forEach((t) => t.classList.toggle("active", t === tab));
+  document.querySelectorAll(".admin-panel").forEach((panel) => { panel.hidden = panel.id !== `panel-${tab.dataset.tab}`; });
+}));
+
+// 管理密钥本会话内自动记住（关闭浏览器即清除，不落盘长期存储）
+const ADMIN_TOKEN_KEY = "qymap-admin-token";
+const savedAdminToken = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+if (savedAdminToken && !tokenInput.value) tokenInput.value = savedAdminToken;
+tokenInput.addEventListener("change", () => sessionStorage.setItem(ADMIN_TOKEN_KEY, tokenInput.value.trim()));
+
+// ---------------- 密码重置申请：列表与审批 ----------------
+const resetRequestList = document.querySelector("#resetRequestList");
+const loadResetRequestsButton = document.querySelector("#loadResetRequestsButton");
+
+loadResetRequestsButton.addEventListener("click", loadResetRequests);
+
+async function loadResetRequests() {
+  resetRequestList.textContent = "加载中……";
+  try {
+    const payload = await request("/admin/reset-requests");
+    const requests = payload.data || [];
+    if (!requests.length) { resetRequestList.textContent = "暂无待审批的申请。"; return; }
+    resetRequestList.innerHTML = requests.map((item) => `<div class="token-row"><strong>${item.username}</strong><span>${item.note || "（无补充说明）"}</span><small>${item.created_at}</small><button class="primary-button" data-approve-reset="${item.id}" data-approve-name="${item.username}" type="button">同意（重置为 12345）</button><button class="delete-button" data-dismiss-reset="${item.id}" type="button">删除记录</button></div>`).join("");
+    resetRequestList.querySelectorAll("[data-approve-reset]").forEach((button) => button.addEventListener("click", async () => {
+      if (!window.confirm(`确认同意 ${button.dataset.approveName} 的重置申请？其密码将重置为 12345，且登录后必须设置新密码。`)) return;
+      button.disabled = true;
+      try {
+        const payload = await request(`/admin/reset-requests/${button.dataset.approveReset}/handle`, { method: "POST" });
+        showToast(payload.delivered === false ? `已重置，但推送可能未送达，请务必人工告知 ${payload.username} 临时密码 12345` : `已重置并推送通知给 ${payload.username}`);
+        loadResetRequests();
+      } catch (error) {
+        showToast(error.message);
+        button.disabled = false;
+      }
+    }));
+    resetRequestList.querySelectorAll("[data-dismiss-reset]").forEach((button) => button.addEventListener("click", async () => {
+      if (!window.confirm("确定删除这条申请记录吗？它将从待审批列表移除。")) return;
+      button.disabled = true;
+      try {
+        await request(`/admin/reset-requests/${button.dataset.dismissReset}`, { method: "DELETE" });
+        showToast("记录已删除");
+        loadResetRequests();
+      } catch (error) {
+        showToast(error.message);
+        button.disabled = false;
+      }
+    }));
+  } catch (error) {
+    resetRequestList.textContent = error.message;
+  }
+}
+
+// ---------------- 用户账号：重置密码 ----------------
+const resetUsernameInput = document.querySelector("#resetUsername");
+const resetPasswordButton = document.querySelector("#resetPasswordButton");
+const resetResult = document.querySelector("#resetResult");
+
+resetPasswordButton.addEventListener("click", async () => {
+  const username = resetUsernameInput.value.trim();
+  if (!username) { resetResult.textContent = "请先输入要重置的用户名。"; return; }
+  resetPasswordButton.disabled = true;
+  resetResult.textContent = "重置中……";
+  try {
+    const payload = await request("/admin/users/reset-password", { method: "POST", body: JSON.stringify({ username }) });
+    resetResult.textContent = `已重置「${payload.username}」的密码。\n临时密码：${payload.tempPassword}\n请告知用户用它登录，登录后系统会强制要求设置新密码。该账号所有登录会话已被踢下线。`;
+  } catch (error) {
+    resetResult.textContent = error.message;
+  }
+  resetPasswordButton.disabled = false;
+});
+
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers: { Authorization: `Bearer ${tokenInput.value.trim()}`, "Content-Type": "application/json", ...(options.headers || {}) } });
   const payload = await response.json().catch(() => ({}));

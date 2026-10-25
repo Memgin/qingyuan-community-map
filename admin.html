@@ -3,25 +3,93 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>清远地图 · 内容审核</title>
-  <link rel="stylesheet" href="style.css?v=20261020-3">
+  <title>清远地图 · 管理后台</title>
+  <link rel="stylesheet" href="style.css?v=20261025-7">
   <style>
-    body { padding: 30px; } .admin-shell { max-width: 980px; margin: auto; } .admin-head { display: flex; justify-content: space-between; align-items: end; margin-bottom: 24px; } .admin-head h1 { margin: 0; font-family: "Noto Serif SC", serif; } .token-row { display: flex; gap: 10px; margin-bottom: 20px; } .token-row input { max-width: 360px; margin: 0; } .admin-card { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; border: 1px solid var(--line); padding: 18px; margin-bottom: 10px; background: var(--panel); } .admin-card h2 { margin: 0 0 6px; font-family: "Noto Serif SC", serif; font-size: 18px; } .admin-card p { margin: 0; color: var(--muted); font-size: 12px; } .admin-actions { display: flex; gap: 8px; } .admin-actions button { border: 0; padding: 10px 13px; color: white; font-size: 11px; font-weight: 700; } .approve { background: var(--green); } .reject { background: var(--coral); } .delete { background: #7a2f2f; } .admin-card h2 small { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 6px; } #adminMessage { color: var(--green); font-size: 12px; } pre { background: var(--panel); border: 1px solid var(--line); padding: 12px; font-size: 12px; overflow-x: auto; }
+    body { padding: 30px; }
+    .admin-shell { max-width: 1020px; margin: auto; }
+    .admin-head { display: flex; justify-content: space-between; align-items: end; margin-bottom: 18px; }
+    .admin-head h1 { margin: 0; font-family: "Noto Serif SC", serif; }
+    .token-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line); padding: 12px 14px; margin-bottom: 16px; }
+    .token-bar input { max-width: 340px; margin: 0; }
+    .token-bar .hint { color: var(--muted); font-size: 12px; }
+    .admin-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 2px solid var(--line); margin-bottom: 18px; }
+    .admin-tab { border: 0; background: none; padding: 11px 15px; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+    .admin-tab.active { color: var(--coral); border-bottom-color: var(--coral); }
+    .admin-panel { background: var(--panel); border: 1px solid var(--line); padding: 22px; }
+    .admin-panel > h2 { margin: 0 0 4px; font-family: "Noto Serif SC", serif; font-size: 17px; }
+    .panel-desc { margin: 0 0 16px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+    .panel-tools { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+    .panel-tools input, .panel-tools select { margin: 0; max-width: 320px; }
+    .admin-card { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; border: 1px solid var(--line); padding: 16px; margin-bottom: 10px; background: white; }
+    .admin-card h2 { margin: 0 0 6px; font-family: "Noto Serif SC", serif; font-size: 16px; }
+    .admin-card p { margin: 0; color: var(--muted); font-size: 12px; }
+    .admin-actions { display: flex; gap: 8px; }
+    .admin-actions button { border: 0; padding: 10px 13px; color: white; font-size: 11px; font-weight: 700; }
+    .approve { background: var(--green); } .reject { background: var(--coral); } .delete { background: #7a2f2f; }
+    .admin-card h2 small { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+    .empty-hint { color: var(--muted); font-size: 13px; padding: 12px 0; }
+    pre { background: #f7f3ec; border: 1px solid var(--line); padding: 12px; font-size: 12px; overflow-x: auto; }
+    #adminMessage { color: var(--green); font-size: 12px; margin: 0 0 10px; }
   </style>
 </head>
 <body>
   <main class="admin-shell">
-    <header class="admin-head"><div><p class="eyebrow">ADMIN / MODERATION</p><h1>地点审核</h1></div><a class="text-button" href="./">返回地图 →</a></header>
-    <div class="token-row"><input id="adminToken" type="password" placeholder="输入 ADMIN_TOKEN"><button class="primary-button" id="loadButton" type="button">加载待审核</button></div>
-    <p id="adminMessage" role="status"></p><section id="pendingList"></section>
-    <h2>点位管理（可删除违规内容）</h2>
-    <div class="token-row"><input id="spotSearch" type="text" placeholder="按名称或地址搜索，留空显示全部"><select id="statusFilter"><option value="">全部状态</option><option value="approved">已上线</option><option value="pending">待审核</option><option value="rejected">已下架</option></select><button class="primary-button" id="loadSpotsButton" type="button">加载点位</button></div>
-    <section id="allSpotsList"></section>
-    <h2>高德自动核验自检</h2>
-    <div class="token-row"><button class="primary-button" id="amapCheckButton" type="button">检查高德接口</button></div>
-    <pre id="amapCheckResult">点击上方按钮，查看高德 REST 接口的返回状态（不会显示 Key）。</pre>
-    <h2>待处理举报</h2><section id="reportList"></section>
+    <header class="admin-head"><div><p class="eyebrow">ADMIN / 清远地图管理后台</p><h1>内容管理</h1></div><a class="text-button" href="./">← 返回地图</a></header>
+
+    <div class="token-bar">
+      <input id="adminToken" type="password" placeholder="管理密钥 ADMIN_TOKEN">
+      <button class="primary-button" id="loadButton" type="button">加载待审核</button>
+      <span class="hint">密钥在本次会话内自动记住，切换标签无需重复输入</span>
+    </div>
+    <p id="adminMessage" role="status"></p>
+
+    <nav class="admin-tabs">
+      <button class="admin-tab active" data-tab="pending" type="button">① 待审核点位</button>
+      <button class="admin-tab" data-tab="spots" type="button">② 全部点位</button>
+      <button class="admin-tab" data-tab="reports" type="button">③ 举报处理</button>
+      <button class="admin-tab" data-tab="account" type="button">④ 账号与密码</button>
+      <button class="admin-tab" data-tab="tools" type="button">⑤ 诊断工具</button>
+    </nav>
+
+    <section class="admin-panel" id="panel-pending">
+      <h2>待审核点位</h2>
+      <p class="panel-desc">用户提交的新地点在这里审核：「通过」即上线公开地图，「驳回」则标记为已下架。</p>
+      <section id="pendingList"><p class="empty-hint">点击上方「加载待审核」开始。</p></section>
+    </section>
+
+    <section class="admin-panel" id="panel-spots" hidden>
+      <h2>全部点位管理</h2>
+      <p class="panel-desc">按名称、地址或状态筛选所有点位，可下架违规内容。</p>
+      <div class="panel-tools"><input id="spotSearch" type="text" placeholder="按名称或地址搜索，留空显示全部"><select id="statusFilter"><option value="">全部状态</option><option value="approved">已上线</option><option value="pending">待审核</option><option value="rejected">已下架</option></select><button class="primary-button" id="loadSpotsButton" type="button">加载点位</button></div>
+      <section id="allSpotsList"></section>
+    </section>
+
+    <section class="admin-panel" id="panel-reports" hidden>
+      <h2>待处理举报</h2>
+      <p class="panel-desc">用户对违规点位的举报。处理后建议到「全部点位」下架对应内容。</p>
+      <section id="reportList"><p class="empty-hint">点击左侧「加载举报」（首次需先加载待审核以验证密钥）。</p></section>
+    </section>
+
+    <section class="admin-panel" id="panel-account" hidden>
+      <h2>密码重置申请（用户提交）</h2>
+      <p class="panel-desc">有绑定设备的账号可「同意」：自动重置并推送临时密码到用户手机；提示无法送达的请「删除记录」，改用下方手动重置并线下告知用户。</p>
+      <div class="panel-tools"><button class="primary-button" id="loadResetRequestsButton" type="button">加载申请</button></div>
+      <section id="resetRequestList"></section>
+      <h2 style="margin-top:28px">手动重置密码</h2>
+      <p class="panel-desc">线下核实身份后使用：密码重置为 12345 并踢掉该用户所有登录，需人工告知用户临时密码。</p>
+      <div class="panel-tools"><input id="resetUsername" type="text" placeholder="要重置的用户名"><button class="primary-button" id="resetPasswordButton" type="button">重置密码</button></div>
+      <pre id="resetResult">重置后流程：临时密码 12345 → 用户登录 → 系统强制要求设置新密码。</pre>
+    </section>
+
+    <section class="admin-panel" id="panel-tools" hidden>
+      <h2>高德接口自检</h2>
+      <p class="panel-desc">排查地图搜索、坐标核验异常时使用：查看高德 REST 接口返回状态（不会显示 Key）。</p>
+      <div class="panel-tools"><button class="primary-button" id="amapCheckButton" type="button">检查高德接口</button></div>
+      <pre id="amapCheckResult">点击上方按钮开始检查。</pre>
+    </section>
   </main>
-  <script src="admin.js?v=20261020-2"></script>
+  <div class="toast" id="adminToast"></div>
+  <script src="admin.js?v=20261025-6"></script>
 </body>
 </html>

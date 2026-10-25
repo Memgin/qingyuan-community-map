@@ -71,6 +71,106 @@ async function checkUpdates() {
   } catch { /* 轮询失败静默处理，下次再试 */ }
 }
 
+/* --------------------------- 审核结果提醒 --------------------------- */
+// 与鸿蒙 App 同一套逻辑：轮询「我的提交」，把状态与本地快照比对，
+// 一旦发现「待审核」变成「已通过 / 未通过」，就弹一条浏览器通知。
+const REVIEW_SNAPSHOT_KEY = "qingyuan-review-snapshot";
+const REVIEW_TRACKED_KEY = "qingyuan-review-tracked";
+// 网页端提交成功后登记点位 id，覆盖「高德核验秒过审核」的场景
+function trackOwnSubmission(spotId) {
+  if (!spotId) return;
+  let tracked = [];
+  try { tracked = JSON.parse(localStorage.getItem(REVIEW_TRACKED_KEY) || "[]"); } catch { tracked = []; }
+  if (!tracked.includes(spotId)) { tracked.push(spotId); localStorage.setItem(REVIEW_TRACKED_KEY, JSON.stringify(tracked)); }
+}
+
+async function checkReviewResults() {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  if (!authToken()) return;
+  let spots = [];
+  try {
+    const response = await fetch(`${API_BASE}/my-spots`, { headers: authHeaders() });
+    if (!response.ok) return;
+    const payload = await response.json();
+    spots = Array.isArray(payload.data) ? payload.data : [];
+  } catch { return; }
+
+  let previous = {};
+  try { previous = JSON.parse(localStorage.getItem(REVIEW_SNAPSHOT_KEY) || "{}"); } catch { previous = {}; }
+  let tracked = [];
+  try { tracked = JSON.parse(localStorage.getItem(REVIEW_TRACKED_KEY) || "[]"); } catch { tracked = []; }
+  const isFirstRun = Object.keys(previous).length === 0;
+  const current = {};
+  const changed = [];
+  for (const spot of spots) {
+    const status = spot.status || "pending";
+    current[String(spot.id)] = status;
+    const before = previous[String(spot.id)];
+    if (before === undefined) {
+      // 新出现的点位：网页端提交且已是终态（高德核验秒过）→ 补一条通知
+      const idx = tracked.indexOf(spot.id);
+      if (idx >= 0 && (status === "approved" || status === "rejected")) { tracked.splice(idx, 1); changed.push(spot); }
+      continue;
+    }
+    if (before !== status && (status === "approved" || status === "rejected")) changed.push(spot);
+  }
+  localStorage.setItem(REVIEW_SNAPSHOT_KEY, JSON.stringify(current));
+  localStorage.setItem(REVIEW_TRACKED_KEY, JSON.stringify(tracked));
+  if (isFirstRun) return; // 首次只建基线，不补发历史通知
+  for (const spot of changed) notifyReviewResult(spot);
+}
+
+function notifyReviewResult(spot) {
+  const approved = spot.status === "approved";
+  new Notification(approved ? "点位已通过审核" : "点位未通过审核", {
+    body: approved
+      ? `「${spot.name}」已上线，现在所有人都能在地图上看到它`
+      : `「${spot.name}」未通过审核，可以调整后重新提交`
+  });
+}
+
+// 顶栏加一个开关：浏览器要求用户主动授权才能弹通知
+function setupReviewReminder() {
+  if (!("Notification" in window)) return;
+  const holder = document.querySelector(".topbar-actions");
+  if (!holder || document.querySelector("#reviewReminderButton")) return;
+  const button = document.createElement("button");
+  button.className = "text-button";
+  button.type = "button";
+  button.id = "reviewReminderButton";
+  button.textContent = Notification.permission === "granted" ? "🔔 审核提醒已开启" : "🔔 开启审核提醒";
+  button.addEventListener("click", async () => {
+    if (Notification.permission === "granted") { showToast("审核结果会通过浏览器通知提醒你"); checkReviewResults(); return; }
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      button.textContent = "🔔 审核提醒已开启";
+      showToast("审核结果会通过浏览器通知提醒你");
+      checkReviewResults();
+    } else {
+      showToast("浏览器通知被拒绝，可在地址栏左侧站点设置里允许");
+    }
+  });
+  holder.insertBefore(button, holder.firstChild);
+}
+
+/* --------------------------- Turnstile 人机验证 --------------------------- */
+// 填入 Cloudflare Turnstile 的 Site Key 即启用（后端需同步配置 TURNSTILE_SECRET）；
+// 留空则不渲染验证组件，注册走服务端的免验证限额（同 IP 每天仅 1 个账号）
+const TURNSTILE_SITE_KEY = "0x4AAAAAAFlIsuJHRZUtIttJ";
+
+if (TURNSTILE_SITE_KEY) {
+  const box = document.querySelector("#turnstileBox");
+  if (box) {
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.onload = () => {
+      window.turnstile.render(box, { sitekey: TURNSTILE_SITE_KEY, theme: "light", language: "zh-cn" });
+    };
+    document.head.appendChild(script);
+  }
+}
+
 function showUpdateBanner(count) {
   let banner = document.querySelector("#updateBanner");
   if (!banner) {
@@ -341,11 +441,36 @@ function renderMarkers() {
     marker.on("click", () => {
       const image = spot.image_url ? `<img src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">` : "";
       const address = escapeHTML(spot.address || "地图上的目的地");
-      const infoWindow = new AMap.InfoWindow({ content: `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small><a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p></div>`, offset: new AMap.Pixel(0, -35), closeWhenClickMap: true });
+      // 地图图钉是轻量数据（fields=map），description 可能为空，必须兜底
+      const description = escapeHTML(spot.description || "");
+      const base = `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small><a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${address} · 导航</a><p>${description}</p><div class="popup-wall"><span class="field-note">照片加载中…</span></div></div>`;
+      const infoWindow = new AMap.InfoWindow({ content: base, offset: new AMap.Pixel(0, -35), closeWhenClickMap: true });
       infoWindow.open(map, marker.getPosition());
+      // 照片墙异步补充：不阻塞弹窗打开，取到后整体重设内容（导航与分类保留在模板里）
+      loadPopupWall(spot, infoWindow);
     });
     return marker;
   });
+}
+
+// 拉取点位社区照片并重绘地图弹窗；spot 来自闭包，字段与列表一致
+async function loadPopupWall(spot, infoWindow) {
+  try {
+    const response = await fetch(`${API_BASE}/spots/${spot.id}/photos`);
+    const payload = await response.json();
+    const photos = Array.isArray(payload.data) ? payload.data : [];
+    const item = categories[spot.category];
+    const image = spot.image_url ? `<img src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">` : "";
+    const address = escapeHTML(spot.address || "地图上的目的地");
+    const description = escapeHTML(spot.description || "");
+    const wall = photos.length
+      ? `<div class="popup-wall">${photos.slice(0, 6).map((photo) => `<figure class="popup-wall-item"><img src="${escapeHTML(photo.url)}" alt="社区照片"><figcaption>${escapeHTML(photo.username || "社区成员")}</figcaption></figure>`).join("")}</div>`
+      : `<div class="popup-wall"><span class="field-note">暂无社区照片</span></div>`;
+    const content = `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small><a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${address} · 导航</a><p>${description}</p>${wall}</div>`;
+    infoWindow.setContent(content);
+  } catch {
+    // 照片加载失败时保留"加载中"占位，不影响基础信息展示
+  }
 }
 
 function renderList() {
@@ -361,12 +486,14 @@ function renderList() {
     const liked = spot.liked === true || Number(state.likes[spot.id] || 0) > 0;
     const likes = `${liked ? "♥" : "♡"} ${likeCount}`;
     const image = spot.image_url ? `<img class="spot-image" src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">` : "";
+    // 提交者：编辑（分类/主图）；其他登录用户：补图（往照片墙追加）
+    const editButton = spot.isOwner ? `<button class="edit-button" data-edit-id="${spot.id}" type="button">编辑</button>` : (state.currentUser ? `<button class="edit-button" data-edit-id="${spot.id}" type="button">补图</button>` : "");
     const deleteButton = spot.isOwner ? `<button class="delete-button" data-delete-id="${spot.id}" type="button">删除</button>` : "";
     const saveButton = state.currentUser && !state.myOnly ? `<button class="save-map-button" data-map-spot-id="${spot.id}" type="button">收藏</button>` : "";
     const reportButton = !state.myOnly ? `<button class="report-button" data-report-id="${spot.id}" type="button">举报</button>` : "";
     const statusText = spot.status === "pending" ? "待审核 · 点击查看位置" : "点击查看位置";
     const address = escapeHTML(spot.address || "地图上的目的地");
-    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div><a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><small>${statusText}</small><span class="card-actions">${saveButton}${reportButton}${deleteButton}<button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button></span></div></article>`;
+    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div><a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><small>${statusText}</small><span class="card-actions">${editButton}${saveButton}${reportButton}${deleteButton}<button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button></span></div></article>`;
   }).join("") : '<div class="empty-state">没有找到匹配的地点，换个关键词试试。</div>';
   document.querySelector("#pageInfo").textContent = `${state.page} / ${totalPages}`;
   document.querySelector("#previousPageButton").disabled = state.page <= 1;
@@ -398,6 +525,11 @@ function renderList() {
     if (!response.ok) { showToast("删除失败，只能删除自己提交的地点"); return; }
     state.spots = state.spots.filter((spot) => String(spot.id) !== String(button.dataset.deleteId));
     render(); showToast("地点已删除");
+  }));
+  spotList.querySelectorAll(".edit-button").forEach((button) => button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const spot = state.spots.find((item) => String(item.id) === button.dataset.editId);
+    if (spot) openEditModal(spot);
   }));
   spotList.querySelectorAll(".save-map-button").forEach((button) => button.addEventListener("click", () => saveSpotToMap(button.dataset.mapSpotId)));
   spotList.querySelectorAll(".spot-card").forEach((card) => card.addEventListener("click", (event) => {
@@ -556,11 +688,109 @@ document.querySelector("#spotForm").addEventListener("submit", async (event) => 
       if (response.status >= 500) { const items = getOutbox(); items.push({ spot, at: Date.now() }); setOutbox(items); }
       formMessage.textContent = payload.error || "提交失败，请稍后重试。"; restoreButton(); return;
     }
+    if (payload.id) trackOwnSubmission(payload.id);
     done(payload.verified ? "地址已由高德核验，自动通过。" : (payload.autocheck ? `${payload.autocheck}。` : "提交成功，等待审核。"), false);
   } catch {
     const items = getOutbox(); items.push({ spot, at: Date.now() }); setOutbox(items);
     saveSpotLocally(imageURL);
     done("网络异常，已在本机保存，联网后会自动同步。", true);
+  }
+});
+
+/* --------------------------- 编辑地点（分类 + 配图） --------------------------- */
+// 按约定：名称/地址/坐标锁定（地点事实不可改，审核结论不受影响），只允许改分类与配图
+const editBackdrop = document.querySelector("#editBackdrop");
+let editingSpotId = null;
+let editingOwner = false;
+
+async function openEditModal(spot) {
+  editingSpotId = spot.id;
+  // 提交者可以改分类与主图；其他登录用户只能往照片墙追加照片
+  editingOwner = spot.isOwner === true;
+  document.querySelector("#ownerEditSection").hidden = !editingOwner;
+  if (editingOwner) {
+    const select = document.querySelector("#editCategory");
+    select.innerHTML = Object.keys(categories).filter((key) => key !== "all").map((key) => `<option value="${key}">${categories[key].label}</option>`).join("");
+    select.value = spot.category;
+    document.querySelector("#editImage").value = "";
+    document.querySelector("#editImageNote").textContent = spot.image_url ? "当前已有主图：不选新图则保留原图，选了即替换" : "当前没有主图，可以上传一张";
+    document.querySelector("#editMessage").textContent = "";
+  }
+  document.querySelector("#editWallImage").value = "";
+  editBackdrop.hidden = false;
+  await refreshPhotoWall(spot.id);
+}
+
+async function refreshPhotoWall(spotId) {
+  const list = document.querySelector("#editWallList");
+  list.innerHTML = '<span class="field-note">加载中…</span>';
+  try {
+    const response = await fetch(`${API_BASE}/spots/${spotId}/photos`);
+    const payload = await response.json();
+    const photos = Array.isArray(payload.data) ? payload.data : [];
+    if (!photos.length) { list.innerHTML = '<span class="field-note">还没有社区照片，来传第一张</span>'; return; }
+    list.innerHTML = photos.map((photo) => `<figure class="wall-item"><img src="${escapeHTML(photo.url)}" alt="社区照片"><figcaption>${escapeHTML(photo.username || "社区成员")}</figcaption>${state.currentUser && photo.user_id === state.currentUser.id ? `<button class="wall-delete" type="button" data-wall-photo-id="${photo.id}" aria-label="删除">×</button>` : ""}</figure>`).join("");
+    list.querySelectorAll(".wall-delete").forEach((button) => button.addEventListener("click", async () => {
+      const response = await fetch(`${API_BASE}/photos/${button.dataset.wallPhotoId}`, { method: "DELETE", headers: authHeaders() });
+      if (response.ok) { showToast("照片已删除"); await refreshPhotoWall(spotId); } else { showToast("只能删除自己上传的照片"); }
+    }));
+  } catch {
+    list.innerHTML = '<span class="field-note">照片加载失败</span>';
+  }
+}
+
+document.querySelector("#addWallPhotoButton").addEventListener("click", async () => {
+  if (!editingSpotId) return;
+  const file = document.querySelector("#editWallImage").files[0];
+  if (!file) { showToast("请先选择一张照片"); return; }
+  if (file.size > 2 * 1024 * 1024) { showToast("图片不能超过 2MB"); return; }
+  const button = document.querySelector("#addWallPhotoButton");
+  button.disabled = true; button.textContent = "上传中…";
+  try {
+    const uploadResponse = await fetch(`${API_BASE}/uploads`, { method: "POST", headers: authHeaders({ "Content-Type": file.type }), body: file });
+    const uploadPayload = await uploadResponse.json().catch(() => ({}));
+    if (!uploadResponse.ok) throw new Error(uploadPayload.error || "图片上传失败");
+    const response = await fetch(`${API_BASE}/spots/${editingSpotId}/photos`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ url: uploadPayload.url }) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "照片提交失败");
+    document.querySelector("#editWallImage").value = "";
+    showToast("照片已补充到点位");
+    await refreshPhotoWall(editingSpotId);
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    button.disabled = false; button.textContent = "上传补充照片";
+  }
+});
+
+document.querySelector("#closeEditButton").addEventListener("click", () => { editBackdrop.hidden = true; });
+
+document.querySelector("#editForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!editingSpotId) return;
+  const message = document.querySelector("#editMessage");
+  const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+  submitButton.disabled = true; submitButton.textContent = "保存中…";
+  try {
+    const body = { category: document.querySelector("#editCategory").value };
+    const file = document.querySelector("#editImage").files[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) throw new Error("图片不能超过 2MB。");
+      const uploadResponse = await fetch(`${API_BASE}/uploads`, { method: "POST", headers: authHeaders({ "Content-Type": file.type }), body: file });
+      const uploadPayload = await uploadResponse.json().catch(() => ({}));
+      if (!uploadResponse.ok) throw new Error(uploadPayload.error || "图片上传失败");
+      body.image_url = uploadPayload.url;
+    }
+    const response = await fetch(`${API_BASE}/spots/${editingSpotId}`, { method: "PUT", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "保存失败");
+    editBackdrop.hidden = true;
+    showToast("地点信息已更新");
+    await loadPublicSpots();
+  } catch (error) {
+    message.textContent = error.message;
+  } finally {
+    submitButton.disabled = false; submitButton.textContent = "保存修改";
   }
 });
 
@@ -577,7 +807,16 @@ function updateAuthUI() {
 async function checkLogin() {
   if (!authToken()) return;
   const response = await fetch(`${API_BASE}/auth/me`, { headers: authHeaders() });
-  if (response.ok) { const payload = await response.json(); state.currentUser = payload.user; updateAuthUI(); if (state.currentUser) await loadMaps(); }
+  if (response.ok) {
+    const payload = await response.json();
+    state.currentUser = payload.user;
+    updateAuthUI();
+    // 强制改密最优先：先弹窗，再加载其他数据（地图加载失败也不能阻塞弹窗）
+    if (payload.mustChangePassword) showForceChange();
+    if (state.currentUser) {
+      try { await loadMaps(); } catch { /* 私人地图加载失败不阻塞页面 */ }
+    }
+  }
 }
 
 async function saveSpotToMap(spotId) {
@@ -601,16 +840,92 @@ document.querySelector("#authButton").addEventListener("click", async () => {
   await fetch(`${API_BASE}/auth/logout`, { method: "POST", headers: authHeaders() }); localStorage.removeItem(AUTH_TOKEN_KEY); state.currentUser = null; updateAuthUI(); showToast("已退出登录");
 });
 document.querySelector("#closeAuthButton").addEventListener("click", () => { authBackdrop.hidden = true; });
-document.querySelector("#authSwitchButton").addEventListener("click", () => { state.authMode = state.authMode === "login" ? "register" : "login"; document.querySelector("#authTitle").textContent = state.authMode === "login" ? "登录清远地图" : "注册清远地图"; document.querySelector("#authSubmitText").textContent = state.authMode === "login" ? "登录" : "注册"; document.querySelector("#authSwitchButton").textContent = state.authMode === "login" ? "没有账号？注册一个" : "已有账号？直接登录"; });
+document.querySelector("#authSwitchButton").addEventListener("click", () => { state.authMode = state.authMode === "login" ? "register" : "login"; document.querySelector("#authTitle").textContent = state.authMode === "login" ? "登录清远地图" : "注册清远地图"; document.querySelector("#authSubmitText").textContent = state.authMode === "login" ? "登录" : "注册"; document.querySelector("#authSwitchButton").textContent = state.authMode === "login" ? "没有账号？注册一个" : "已有账号？直接登录"; // 密码长度策略只在注册时生效；登录不限制（临时密码/旧密码可能较短）
+  document.querySelector("#authPassword").minLength = state.authMode === "register" ? 8 : 0; });
+document.querySelector("#forgotPasswordButton").addEventListener("click", () => {
+  // 切换到找回密码申请视图：提交后由管理员在后台审批
+  document.querySelector("#authForm").hidden = true;
+  document.querySelector("#authSwitchButton").hidden = true;
+  document.querySelector("#forgotPasswordButton").hidden = true;
+  document.querySelector("#forgotPanel").hidden = false;
+  document.querySelector("#authTitle").textContent = "申请重置密码";
+  document.querySelector("#authMessage").textContent = "";
+});
+
+document.querySelector("#forgotBackButton").addEventListener("click", () => {
+  document.querySelector("#forgotPanel").hidden = true;
+  document.querySelector("#authForm").hidden = false;
+  document.querySelector("#authSwitchButton").hidden = false;
+  document.querySelector("#forgotPasswordButton").hidden = false;
+  document.querySelector("#authTitle").textContent = "登录清远地图";
+});
+
+document.querySelector("#forgotForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = document.querySelector("#forgotMessage");
+  const username = document.querySelector("#forgotUsername").value.trim();
+  if (!username) { message.textContent = "请填写用户名"; return; }
+  document.querySelector("#forgotSubmitButton").disabled = true;
+  message.textContent = "提交中……";
+  try {
+    const response = await fetch(`${API_BASE}/auth/reset-request`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, note: document.querySelector("#forgotNote").value.trim() }) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "提交失败");
+    message.textContent = payload.message || "申请已提交";
+  } catch (error) {
+    message.textContent = error.message;
+  }
+  document.querySelector("#forgotSubmitButton").disabled = false;
+});
+
+// 强制改密：临时密码登录后必须设置新密码才能继续
+const forceChangeBackdrop = document.querySelector("#forceChangeBackdrop");
+function showForceChange() { forceChangeBackdrop.hidden = false; }
+document.querySelector("#forceChangeForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = document.querySelector("#forceChangeMessage");
+  const newPassword = document.querySelector("#forceNewPassword").value;
+  message.textContent = "保存中……";
+  try {
+    const response = await fetch(`${API_BASE}/auth/change-password`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ newPassword }) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "修改失败");
+    // 改密成功：重载页面清掉 URL 参数与全部临时状态
+    location.href = location.pathname;
+  } catch (error) {
+    message.textContent = error.message;
+  }
+});
 document.querySelector("#authForm").addEventListener("submit", async (event) => {
-  event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget)); const endpoint = state.authMode === "login" ? "login" : "register"; const message = document.querySelector("#authMessage"); message.textContent = "处理中……";
-  try { const response = await fetch(`${API_BASE}/auth/${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "请求失败"); localStorage.setItem(AUTH_TOKEN_KEY, payload.token); state.currentUser = payload.user; authBackdrop.hidden = true; updateAuthUI(); await loadMaps(); showToast(`欢迎，${payload.user.username}`); } catch (error) { message.textContent = error.message; }
+  event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget));
+  // Turnstile 人机验证 token（注册时随表单提交；未启用 site key 时为空串走免验证限额）
+  if (state.authMode === "register" && window.turnstile) data.cfToken = turnstile.getResponse() || "";
+  const endpoint = state.authMode === "login" ? "login" : "register"; const message = document.querySelector("#authMessage"); message.textContent = "处理中……";
+  try { const response = await fetch(`${API_BASE}/auth/${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "请求失败"); localStorage.setItem(AUTH_TOKEN_KEY, payload.token); state.currentUser = payload.user; authBackdrop.hidden = true; updateAuthUI(); if (payload.mustChangePassword) { location.href = location.pathname + "?forceChange=1"; return; } await loadMaps(); showToast(`欢迎，${payload.user.username}`); } catch (error) { message.textContent = error.message; }
 });
 document.querySelector("#mapForm").addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget; const name = new FormData(form).get("name"); try { const response = await fetch(`${API_BASE}/maps`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ name }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); form.reset(); await loadMaps(); showToast(`私人地图“${payload.name}”已创建`); } catch (error) { showToast(error.message || "创建失败"); } });
 render();
 loadPublicSpots();
 checkLogin();
-// 离线提交重发 + 联网即同步 + 定时检查新点位
+// 从「全部地点」页点卡片跳回时（index.html?spot=ID），定位该点位并打开弹窗
+const requestedSpot = new URLSearchParams(location.search).get("spot");
+if (requestedSpot) {
+  const waitForSpot = (tries) => {
+    const spot = state.mapSpots.find((item) => String(item.id) === requestedSpot);
+    if (spot) {
+      map.setZoomAndCenter(16, [spot.lng, spot.lat], true);
+      const marker = state.markers.find((m) => m.getTitle() === spot.name);
+      if (marker) marker.emit("click");
+    } else if (tries > 0) {
+      setTimeout(() => waitForSpot(tries - 1), 500);
+    }
+  };
+  waitForSpot(20);
+}
+// 离线提交重发 + 联网即同步 + 定时检查新点位 + 审核结果提醒
 flushOutbox();
 window.addEventListener("online", flushOutbox);
 setInterval(checkUpdates, 60000);
+setInterval(checkReviewResults, 60000);
+setupReviewReminder();
+checkReviewResults();
