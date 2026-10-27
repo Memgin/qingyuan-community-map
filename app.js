@@ -537,17 +537,23 @@ function drawRoute(spots) {
   const container = document.querySelector("#guideMap");
   if (!container) return;
   container.hidden = false;
-  // 下一帧再创建/绘制：确保容器完成布局，高德地图才能正确计算尺寸渲染瓦片
+  // 下一帧再创建/绘制：确保容器完成布局，高德地图才能正确计算尺寸渲染瓦片。
+  // 初始化异常时直接把错误显示在容器里，便于定位
   requestAnimationFrame(() => {
-    if (!guideMap) guideMap = new AMap.Map("guideMap", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D" });
-    guideRouteOverlay.polyline = new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true });
-    guideMap.add(guideRouteOverlay.polyline);
-    ordered.forEach((spot, index) => {
-      const badge = new AMap.Marker({ position: [spot.lng, spot.lat], content: `<div class="route-badge">${index + 1}</div>`, offset: new AMap.Pixel(-13, -40), zIndex: 110 });
-      guideMap.add(badge);
-      guideRouteOverlay.badges.push(badge);
-    });
-    guideMap.setFitView(null, false, [40, 40, 40, 40]);
+    try {
+      if (!guideMap) guideMap = new AMap.Map("guideMap", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D" });
+      guideRouteOverlay.polyline = new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true });
+      guideMap.add(guideRouteOverlay.polyline);
+      ordered.forEach((spot, index) => {
+        const badge = new AMap.Marker({ position: [spot.lng, spot.lat], content: `<div class="route-badge">${index + 1}</div>`, offset: new AMap.Pixel(-13, -40), zIndex: 110 });
+        guideMap.add(badge);
+        guideRouteOverlay.badges.push(badge);
+      });
+      guideMap.setFitView(null, false, [40, 40, 40, 40]);
+    } catch (error) {
+      console.error("向导小地图初始化失败", error);
+      container.innerHTML = `<p style="padding:20px;color:#B33A3A;font-size:13px">小地图加载失败：${escapeHTML(String(error?.message || error))}</p>`;
+    }
   });
 }
 
