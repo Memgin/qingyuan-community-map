@@ -494,11 +494,10 @@ let guideRouteOverlay = { polyline: null, badges: [] };
 
 function clearGuideRoute() {
   const container = document.querySelector("#guideMap");
-  if (guideMap) {
-    if (guideRouteOverlay.polyline) { guideMap.remove(guideRouteOverlay.polyline); guideRouteOverlay.polyline = null; }
-    guideRouteOverlay.badges.forEach((badge) => guideMap.remove(badge));
-    guideRouteOverlay.badges = [];
-  }
+  // 销毁实例：下次推荐时全新创建，规避渲染状态异常
+  if (guideMap) { guideMap.destroy(); guideMap = null; }
+  guideRouteOverlay.polyline = null;
+  guideRouteOverlay.badges = [];
   if (container) container.hidden = true;
   const clearButton = document.querySelector("#clearRouteButton");
   const orderText = document.querySelector("#routeOrder");
@@ -538,10 +537,12 @@ function drawRoute(spots) {
   if (!container) return;
   container.hidden = false;
   // 下一帧再创建/绘制：确保容器完成布局，高德地图才能正确计算尺寸渲染瓦片。
+  // 每次销毁重建实例：避免首次在不可见状态创建导致的渲染状态异常（画面空白）。
   // 初始化异常时直接把错误显示在容器里，便于定位
   requestAnimationFrame(() => {
     try {
-      if (!guideMap) guideMap = new AMap.Map("guideMap", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D" });
+      if (guideMap) { guideMap.destroy(); guideMap = null; }
+      guideMap = new AMap.Map("guideMap", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D" });
       guideRouteOverlay.polyline = new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true });
       guideMap.add(guideRouteOverlay.polyline);
       ordered.forEach((spot, index) => {
