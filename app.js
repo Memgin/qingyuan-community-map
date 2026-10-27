@@ -483,45 +483,27 @@ function highlightSpots(ids) {
     map.setBounds(new AMap.Bounds(new AMap.LngLat(Math.min(...lngs), Math.min(...lats)), new AMap.LngLat(Math.max(...lngs), Math.max(...lats))));
   }
   showToast(`已在地图高亮 ${targets.length} 个推荐点位`);
-  // 三个及以上点位时自动连成一条游览路线（按地理顺序）
+  // 两个及以上点位时在向导区小地图上连成游览路线（主地图只高亮不画线）
   drawRoute(targets.length >= 2 ? targets : []);
 }
 
-/* ---------------- 推荐路线：把推荐点位按地理顺序连成游览线路 ---------------- */
-let routeOverlay = { polyline: null, badges: [] };
+/* ---------------- 推荐路线：向导区小地图可视化（主地图仅高亮，不画线） ---------------- */
 // AI 向导区内嵌小地图：懒加载，首次推荐时创建
 let guideMap = null;
 let guideRouteOverlay = { polyline: null, badges: [] };
 
-function ensureGuideMap() {
-  const container = document.querySelector("#guideMap");
-  if (!container) return null;
-  // hidden 状态下容器尺寸为 0，必须先显示再初始化地图实例
-  if (container.hidden) container.hidden = false;
-  if (!guideMap) {
-    guideMap = new AMap.Map("guideMap", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D" });
-  }
-  return guideMap;
-}
-
 function clearGuideRoute() {
-  if (!guideMap) return;
-  if (guideRouteOverlay.polyline) { guideMap.remove(guideRouteOverlay.polyline); guideRouteOverlay.polyline = null; }
-  guideRouteOverlay.badges.forEach((badge) => guideMap.remove(badge));
-  guideRouteOverlay.badges = [];
   const container = document.querySelector("#guideMap");
+  if (guideMap) {
+    if (guideRouteOverlay.polyline) { guideMap.remove(guideRouteOverlay.polyline); guideRouteOverlay.polyline = null; }
+    guideRouteOverlay.badges.forEach((badge) => guideMap.remove(badge));
+    guideRouteOverlay.badges = [];
+  }
   if (container) container.hidden = true;
-}
-
-function clearRoute() {
-  if (routeOverlay.polyline) { map.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
-  routeOverlay.badges.forEach((badge) => map.remove(badge));
-  routeOverlay.badges = [];
   const clearButton = document.querySelector("#clearRouteButton");
   const orderText = document.querySelector("#routeOrder");
   if (clearButton) clearButton.hidden = true;
   if (orderText) { orderText.hidden = true; orderText.textContent = ""; }
-  clearGuideRoute();
 }
 
 // 最近邻贪心：从第一个点出发依次连最近的未访问点，形成顺路的游览顺序
@@ -544,36 +526,33 @@ function orderRouteSpots(spots) {
 }
 
 function drawRoute(spots) {
-  clearRoute();
+  clearGuideRoute();
   if (spots.length < 2) return;
   const ordered = orderRouteSpots(spots);
   const path = ordered.map((spot) => [spot.lng, spot.lat]);
-  routeOverlay.polyline = new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true, zIndex: 80 });
-  map.add(routeOverlay.polyline);
-  ordered.forEach((spot, index) => {
-    const badge = new AMap.Marker({ position: [spot.lng, spot.lat], content: `<div class="route-badge">${index + 1}</div>`, offset: new AMap.Pixel(-13, -40), zIndex: 110 });
-    map.add(badge);
-    routeOverlay.badges.push(badge);
-  });
   const orderText = document.querySelector("#routeOrder");
   if (orderText) { orderText.hidden = false; orderText.textContent = `🧭 推荐路线：${ordered.map((spot, index) => `${index + 1}. ${spot.name}`).join(" → ")}`; }
   const clearButton = document.querySelector("#clearRouteButton");
   if (clearButton) clearButton.hidden = false;
-  // 向导区内嵌小地图：同样的路线再画一份，直接在推荐结果下方可视化
-  const gmap = ensureGuideMap();
-  if (!gmap) return;
-  guideRouteOverlay.polyline = new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true, zIndex: 80 });
-  gmap.add(guideRouteOverlay.polyline);
-  ordered.forEach((spot, index) => {
-    const badge = new AMap.Marker({ position: [spot.lng, spot.lat], content: `<div class="route-badge">${index + 1}</div>`, offset: new AMap.Pixel(-13, -40), zIndex: 110 });
-    gmap.add(badge);
-    guideRouteOverlay.badges.push(badge);
+  const container = document.querySelector("#guideMap");
+  if (!container) return;
+  container.hidden = false;
+  // 下一帧再创建/绘制：确保容器完成布局，高德地图才能正确计算尺寸渲染瓦片
+  requestAnimationFrame(() => {
+    if (!guideMap) guideMap = new AMap.Map("guideMap", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D" });
+    guideRouteOverlay.polyline = new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true });
+    guideMap.add(guideRouteOverlay.polyline);
+    ordered.forEach((spot, index) => {
+      const badge = new AMap.Marker({ position: [spot.lng, spot.lat], content: `<div class="route-badge">${index + 1}</div>`, offset: new AMap.Pixel(-13, -40), zIndex: 110 });
+      guideMap.add(badge);
+      guideRouteOverlay.badges.push(badge);
+    });
+    guideMap.setFitView(null, false, [40, 40, 40, 40]);
   });
-  gmap.setFitView(null, false, [40, 40, 40, 40]);
 }
 
 document.querySelector("#clearRouteButton").addEventListener("click", () => {
-  clearRoute();
+  clearGuideRoute();
   state.highlightIds = new Set();
   refreshList();
 });
