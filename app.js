@@ -700,7 +700,7 @@ document.querySelector("#recommendForm").addEventListener("submit", async (event
   result.textContent = "正在按你当前地图视野整理推荐……";
   const center = map.getCenter();
   try {
-    const response = await fetch(`${API_BASE}/recommend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: document.querySelector("#recommendInput").value.trim(), center: { lat: center.getLat(), lng: center.getLng() } }) });
+    const response = await fetch(`${API_BASE}/recommend`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ prompt: document.querySelector("#recommendInput").value.trim(), center: { lat: center.getLat(), lng: center.getLng() } }) });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       // 会话过期等导致的 401：直接弹出登录页重新登录
