@@ -414,7 +414,9 @@ async function handleResetRequest(request, env, id) {
   // 推送临时密码到用户设备（Push Kit）：用户无需再等管理员人工告知
   const delivered = await pushToUser(env, user.id, "密码重置已通过",
     `你的临时密码是 ${tempPassword}，请用它登录，登录后请立即设置新密码`);
-  return json({ username: req.username, delivered }, 200, env);
+  // 仅在推送未送达时回显明文：此时管理员必须线下转告，否则用户将彻底无法登录；
+  // 推送成功则不在响应中回传凭证（与手动重置保持同一原则）
+  return json({ username: req.username, delivered, tempPassword: delivered ? undefined : tempPassword }, 200, env);
 }
 
 // 驳回/删除申请：软删除（状态改 dismissed），待审批列表不再显示，但数据库保留痕迹
