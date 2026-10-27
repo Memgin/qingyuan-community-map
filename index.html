@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261025-8">
+  <link rel="stylesheet" href="style.css?v=20261025-9">
 </head>
 <body>
   <main class="app-shell">
@@ -49,6 +49,8 @@
       <div><p class="eyebrow">AI GUIDE / 02</p><h2>不知道去哪？问问清远。</h2><p>输入你的需求，推荐接口会从已审核点位中整理路线。</p></div>
       <form id="recommendForm"><input id="recommendInput" type="text" placeholder="例如：周末想找一个安静的徒步地方" maxlength="120" required><button class="primary-button" type="submit">开始推荐 <span>→</span></button></form>
       <p id="recommendResult" class="recommend-result" role="status"></p>
+      <p id="routeOrder" class="recommend-result" hidden></p>
+      <button class="text-button" id="clearRouteButton" type="button" hidden>🧹 清除推荐路线</button>
     </section>
     <section class="private-panel" id="privatePanel" hidden>
       <div><p class="eyebrow">PRIVATE MAPS / 03</p><h2>我的私人地图</h2><p id="authStatus">登录后创建只属于你的地点清单。</p></div>

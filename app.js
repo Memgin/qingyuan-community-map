@@ -483,7 +483,65 @@ function highlightSpots(ids) {
     map.setBounds(new AMap.Bounds(new AMap.LngLat(Math.min(...lngs), Math.min(...lats)), new AMap.LngLat(Math.max(...lngs), Math.max(...lats))));
   }
   showToast(`已在地图高亮 ${targets.length} 个推荐点位`);
+  // 三个及以上点位时自动连成一条游览路线（按地理顺序）
+  drawRoute(targets.length >= 2 ? targets : []);
 }
+
+/* ---------------- 推荐路线：把推荐点位按地理顺序连成游览线路 ---------------- */
+let routeOverlay = { polyline: null, badges: [] };
+
+function clearRoute() {
+  if (routeOverlay.polyline) { map.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
+  routeOverlay.badges.forEach((badge) => map.remove(badge));
+  routeOverlay.badges = [];
+  const clearButton = document.querySelector("#clearRouteButton");
+  const orderText = document.querySelector("#routeOrder");
+  if (clearButton) clearButton.hidden = true;
+  if (orderText) { orderText.hidden = true; orderText.textContent = ""; }
+}
+
+// 最近邻贪心：从第一个点出发依次连最近的未访问点，形成顺路的游览顺序
+function orderRouteSpots(spots) {
+  if (spots.length <= 2) return spots.slice();
+  const remaining = spots.slice(1);
+  const ordered = [spots[0]];
+  let current = spots[0];
+  while (remaining.length) {
+    let bestIndex = 0;
+    let bestDistance = Infinity;
+    remaining.forEach((spot, index) => {
+      const distance = Math.abs(spot.lat - current.lat) + Math.abs(spot.lng - current.lng);
+      if (distance < bestDistance) { bestDistance = distance; bestIndex = index; }
+    });
+    current = remaining.splice(bestIndex, 1)[0];
+    ordered.push(current);
+  }
+  return ordered;
+}
+
+function drawRoute(spots) {
+  clearRoute();
+  if (spots.length < 2) return;
+  const ordered = orderRouteSpots(spots);
+  const path = ordered.map((spot) => [spot.lng, spot.lat]);
+  routeOverlay.polyline = new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true, zIndex: 80 });
+  map.add(routeOverlay.polyline);
+  ordered.forEach((spot, index) => {
+    const badge = new AMap.Marker({ position: [spot.lng, spot.lat], content: `<div class="route-badge">${index + 1}</div>`, offset: new AMap.Pixel(-13, -40), zIndex: 110 });
+    map.add(badge);
+    routeOverlay.badges.push(badge);
+  });
+  const orderText = document.querySelector("#routeOrder");
+  if (orderText) { orderText.hidden = false; orderText.textContent = `🧭 推荐路线：${ordered.map((spot, index) => `${index + 1}. ${spot.name}`).join(" → ")}`; }
+  const clearButton = document.querySelector("#clearRouteButton");
+  if (clearButton) clearButton.hidden = false;
+}
+
+document.querySelector("#clearRouteButton").addEventListener("click", () => {
+  clearRoute();
+  state.highlightIds = new Set();
+  refreshList();
+});
 
 // 地图图钉的数据源：公开模式用轻量全量数据，我的提交模式用本地列表
 function visibleSpots() {
