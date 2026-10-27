@@ -687,6 +687,12 @@ document.querySelector("#pickLocationButton").addEventListener("click", () => {
 });
 document.querySelector("#recommendForm").addEventListener("submit", async (event) => {
   event.preventDefault();
+  // AI 推荐消耗真实模型配额，必须登录：未登录直接弹出登录页，而不是事后提示
+  if (!state.currentUser) {
+    openAuth();
+    document.querySelector("#recommendResult").textContent = "登录后即可使用 AI 推荐";
+    return;
+  }
   const result = document.querySelector("#recommendResult");
   const submitButton = event.currentTarget.querySelector("button[type=submit]");
   const originalText = submitButton ? submitButton.textContent : "";
@@ -696,7 +702,16 @@ document.querySelector("#recommendForm").addEventListener("submit", async (event
   try {
     const response = await fetch(`${API_BASE}/recommend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: document.querySelector("#recommendInput").value.trim(), center: { lat: center.getLat(), lng: center.getLng() } }) });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || "推荐暂不可用");
+    if (!response.ok) {
+      // 会话过期等导致的 401：直接弹出登录页重新登录
+      if (response.status === 401) {
+        state.currentUser = null;
+        updateAuthUI();
+        openAuth();
+        throw new Error("登录已过期，请重新登录后使用 AI 推荐");
+      }
+      throw new Error(payload.error || "推荐暂不可用");
+    }
     result.textContent = payload.recommendation || "推荐结果已返回，请查看地图点位。";
     highlightSpots(payload.spotIds || []);
   } catch (error) {
