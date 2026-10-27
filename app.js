@@ -19,7 +19,9 @@ const map = new AMap.Map("map", { zoom: 12, center: [113.056, 23.6818], viewMode
 // 向导区路线小地图：容器始终参与布局（用 height/opacity 显隐，而非 display:none，
 // 否则高德渲染器会暂停且不自动恢复）。实例在页面加载时创建，与主地图同生命周期，
 // 后续路线编辑功能在此实例上扩展。
-const guideMap = new AMap.Map("guideMap", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D", mapStyle: "amap://styles/normal" });
+// useNativeMap: 强制用 Canvas2D 渲染——绕开 Windows Chrome 的 WebGPU
+// requestAdapter 二次调用失败（"No available adapters"）导致的空白画布
+const guideMap = new AMap.Map("guideMap", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D", mapStyle: "amap://styles/normal", useNativeMap: true });
 
 // ---------------- 位置纠偏：拖动标记修正点位位置，提交后转管理员确认 ----------------
 let correctionContext = null;
