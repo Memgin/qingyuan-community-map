@@ -987,8 +987,10 @@ document.querySelector("#authButton").addEventListener("click", async () => {
   await fetch(`${API_BASE}/auth/logout`, { method: "POST", headers: authHeaders() }); localStorage.removeItem(AUTH_TOKEN_KEY); state.currentUser = null; updateAuthUI(); showToast("已退出登录");
 });
 document.querySelector("#closeAuthButton").addEventListener("click", () => { authBackdrop.hidden = true; });
-document.querySelector("#authSwitchButton").addEventListener("click", () => { state.authMode = state.authMode === "login" ? "register" : "login"; document.querySelector("#authTitle").textContent = state.authMode === "login" ? "登录清远地图" : "注册清远地图"; document.querySelector("#authSubmitText").textContent = state.authMode === "login" ? "登录" : "注册"; document.querySelector("#authSwitchButton").textContent = state.authMode === "login" ? "没有账号？注册一个" : "已有账号？直接登录"; // 密码长度策略只在注册时生效；登录不限制（临时密码/旧密码可能较短）
-  document.querySelector("#authPassword").minLength = state.authMode === "register" ? 8 : 0; });
+document.querySelector("#authSwitchButton").addEventListener("click", () => {
+  // 注册已移至独立页面 register.html：Turnstile 只在注册页加载，避免其 CSP 影响主页面地图
+  location.href = "register.html";
+});
 document.querySelector("#forgotPasswordButton").addEventListener("click", () => {
   // 切换到找回密码申请视图：提交后由管理员在后台审批
   document.querySelector("#authForm").hidden = true;
@@ -1045,9 +1047,8 @@ document.querySelector("#forceChangeForm").addEventListener("submit", async (eve
 });
 document.querySelector("#authForm").addEventListener("submit", async (event) => {
   event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget));
-  // Turnstile 已停用（见上方说明）：注册防刷由后端 IP 注册限额兜底
-  const endpoint = state.authMode === "login" ? "login" : "register"; const message = document.querySelector("#authMessage"); message.textContent = "处理中……";
-  try { const response = await fetch(`${API_BASE}/auth/${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "请求失败"); localStorage.setItem(AUTH_TOKEN_KEY, payload.token); state.currentUser = payload.user; authBackdrop.hidden = true; updateAuthUI(); if (payload.mustChangePassword) { location.href = location.pathname + "?forceChange=1"; return; } await loadMaps(); showToast(`欢迎，${payload.user.username}`); } catch (error) { message.textContent = error.message; }
+  const message = document.querySelector("#authMessage"); message.textContent = "处理中……";
+  try { const response = await fetch(`${API_BASE}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: data.username, password: data.password }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "请求失败"); localStorage.setItem(AUTH_TOKEN_KEY, payload.token); state.currentUser = payload.user; authBackdrop.hidden = true; updateAuthUI(); if (payload.mustChangePassword) { location.href = location.pathname + "?forceChange=1"; return; } await loadMaps(); showToast(`欢迎，${payload.user.username}`); } catch (error) { message.textContent = error.message; }
 });
 document.querySelector("#mapForm").addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget; const name = new FormData(form).get("name"); try { const response = await fetch(`${API_BASE}/maps`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ name }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); form.reset(); await loadMaps(); showToast(`私人地图“${payload.name}”已创建`); } catch (error) { showToast(error.message || "创建失败"); } });
 render();

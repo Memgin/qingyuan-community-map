@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>注册 · 清远社区共享地图</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style.css?v=20261025-10">
+  <style>
+    body { padding: 30px; display: grid; place-items: center; min-height: 100vh; background: #F4F3ED; }
+    .register-card { width: 100%; max-width: 420px; background: #FFFDF8; border: 1px solid #DCE1D9; border-radius: 18px; padding: 30px; }
+    .register-card h1 { margin: 0 0 6px; font-family: "Noto Serif SC", serif; font-size: 22px; }
+    .register-card .eyebrow { margin: 0 0 10px; }
+    .register-intro { margin: 0 0 20px; color: #71807A; font-size: 13px; line-height: 1.7; }
+    .register-card label { display: block; font-size: 12px; color: #71807A; margin: 14px 0 6px; }
+    .register-card input { width: 100%; }
+    #registerMessage { color: #B33A3A; font-size: 13px; min-height: 20px; margin: 12px 0; }
+    #turnstileBox { margin: 16px 0; min-height: 66px; }
+    .back-link { display: block; text-align: center; margin-top: 16px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main class="register-card">
+    <p class="eyebrow">ACCOUNT / 注册账号</p>
+    <h1>注册清远社区共享地图</h1>
+    <p class="register-intro">注册后与网页端、App 端共享同一份数据：提交地点、点赞收藏、我的提交两端一致。</p>
+    <form id="registerForm">
+      <label for="regUsername">用户名（2-24 字符，支持中文）</label>
+      <input id="regUsername" name="username" type="text" minlength="2" maxlength="24" required>
+      <label for="regPassword">密码（至少 8 位，需同时包含字母和数字）</label>
+      <input id="regPassword" name="password" type="password" minlength="8" maxlength="128" required>
+      <div id="turnstileBox"></div>
+      <button class="primary-button full-width" type="submit" id="registerSubmit">注册并登录 <span>→</span></button>
+    </form>
+    <p id="registerMessage" role="status"></p>
+    <a class="text-button back-link" href="index.html">← 已有账号？返回登录</a>
+  </main>
+  <script>
+    const API_BASE = "/api";
+    const AUTH_TOKEN_KEY = "qingyuan-auth-token";
+    const TURNSTILE_SITE_KEY = "0x4AAAAAAFlIsuJHRZUtIttJ";
+    // Turnstile 仅在本页加载，避免其注入的 CSP 影响主页面地图渲染
+    const turnstileBox = document.querySelector("#turnstileBox");
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.onload = () => { window.turnstile.render(turnstileBox, { sitekey: TURNSTILE_SITE_KEY, theme: "light", language: "zh-cn" }); };
+    document.head.appendChild(script);
+
+    document.querySelector("#registerForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const message = document.querySelector("#registerMessage");
+      const username = document.querySelector("#regUsername").value.trim();
+      const password = document.querySelector("#regPassword").value;
+      if (!password || password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+        message.textContent = "密码至少 8 位，需同时包含字母和数字";
+        return;
+      }
+      const cfToken = window.turnstile ? (turnstile.getResponse() || "") : "";
+      if (!cfToken) { message.textContent = "请先完成人机验证"; return; }
+      const submitButton = document.querySelector("#registerSubmit");
+      submitButton.disabled = true;
+      message.textContent = "注册中……";
+      try {
+        const response = await fetch(`${API_BASE}/auth/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password, cfToken }) });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || "注册失败");
+        // 注册成功：写入与主页面一致的登录态，跳回主页
+        localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
+        location.href = "index.html";
+      } catch (error) {
+        message.textContent = error.message;
+        submitButton.disabled = false;
+        if (window.turnstile) turnstile.reset();
+      }
+    });
+  </script>
+</body>
+</html>
