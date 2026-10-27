@@ -16,6 +16,10 @@ const AUTH_TOKEN_KEY = "qingyuan-auth-token";
 const ACTOR_TOKEN_KEY = "qingyuan-actor-token";
 
 const map = new AMap.Map("map", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D", mapStyle: "amap://styles/normal" });
+// 向导区路线小地图：容器始终参与布局（用 height/opacity 显隐，而非 display:none，
+// 否则高德渲染器会暂停且不自动恢复）。实例在页面加载时创建，与主地图同生命周期，
+// 后续路线编辑功能在此实例上扩展。
+const guideMap = new AMap.Map("guideMap", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D", mapStyle: "amap://styles/normal" });
 
 // ---------------- 位置纠偏：拖动标记修正点位位置，提交后转管理员确认 ----------------
 let correctionContext = null;
@@ -487,18 +491,15 @@ function highlightSpots(ids) {
   drawRoute(targets.length >= 2 ? targets : []);
 }
 
-/* ---------------- 推荐路线：向导区小地图可视化（主地图仅高亮，不画线） ---------------- */
-// AI 向导区内嵌小地图：懒加载，首次推荐时创建
-let guideMap = null;
-let guideRouteOverlay = { polyline: null, badges: [] };
+/* ---------------- 推荐路线：向导区下方可交互小地图（为路线编辑预留） ---------------- */
+let routeOverlay = { polyline: null, badges: [] };
 
-function clearGuideRoute() {
+function clearRoute() {
+  if (routeOverlay.polyline) { guideMap.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
+  routeOverlay.badges.forEach((badge) => guideMap.remove(badge));
+  routeOverlay.badges = [];
   const container = document.querySelector("#guideMap");
-  // 销毁实例：下次推荐时全新创建，规避渲染状态异常
-  if (guideMap) { guideMap.destroy(); guideMap = null; }
-  guideRouteOverlay.polyline = null;
-  guideRouteOverlay.badges = [];
-  if (container) container.hidden = true;
+  if (container) container.classList.remove("visible");
   const clearButton = document.querySelector("#clearRouteButton");
   const orderText = document.querySelector("#routeOrder");
   if (clearButton) clearButton.hidden = true;
@@ -525,7 +526,7 @@ function orderRouteSpots(spots) {
 }
 
 function drawRoute(spots) {
-  clearGuideRoute();
+  clearRoute();
   if (spots.length < 2) return;
   const ordered = orderRouteSpots(spots);
   const path = ordered.map((spot) => [spot.lng, spot.lat]);
@@ -534,32 +535,20 @@ function drawRoute(spots) {
   const clearButton = document.querySelector("#clearRouteButton");
   if (clearButton) clearButton.hidden = false;
   const container = document.querySelector("#guideMap");
-  if (!container) return;
-  container.hidden = false;
-  // 下一帧再创建/绘制：确保容器完成布局，高德地图才能正确计算尺寸渲染瓦片。
-  // 每次销毁重建实例：避免首次在不可见状态创建导致的渲染状态异常（画面空白）。
-  // 初始化异常时直接把错误显示在容器里，便于定位
-  requestAnimationFrame(() => {
-    try {
-      if (guideMap) { guideMap.destroy(); guideMap = null; }
-      guideMap = new AMap.Map("guideMap", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D" });
-      guideRouteOverlay.polyline = new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true });
-      guideMap.add(guideRouteOverlay.polyline);
-      ordered.forEach((spot, index) => {
-        const badge = new AMap.Marker({ position: [spot.lng, spot.lat], content: `<div class="route-badge">${index + 1}</div>`, offset: new AMap.Pixel(-13, -40), zIndex: 110 });
-        guideMap.add(badge);
-        guideRouteOverlay.badges.push(badge);
-      });
-      guideMap.setFitView(null, false, [40, 40, 40, 40]);
-    } catch (error) {
-      console.error("向导小地图初始化失败", error);
-      container.innerHTML = `<p style="padding:20px;color:#B33A3A;font-size:13px">小地图加载失败：${escapeHTML(String(error?.message || error))}</p>`;
-    }
+  if (container) container.classList.add("visible");
+  // 路线画在向导区小地图上（主地图只高亮）：虚线连接 + 序号标记
+  routeOverlay.polyline = new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true, zIndex: 80 });
+  guideMap.add(routeOverlay.polyline);
+  ordered.forEach((spot, index) => {
+    const badge = new AMap.Marker({ position: [spot.lng, spot.lat], content: `<div class="route-badge">${index + 1}</div>`, offset: new AMap.Pixel(-13, -40), zIndex: 110 });
+    guideMap.add(badge);
+    routeOverlay.badges.push(badge);
   });
+  guideMap.setFitView(null, false, [40, 40, 40, 40]);
 }
 
 document.querySelector("#clearRouteButton").addEventListener("click", () => {
-  clearGuideRoute();
+  clearRoute();
   state.highlightIds = new Set();
   refreshList();
 });

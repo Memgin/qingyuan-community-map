@@ -61,6 +61,7 @@ async function dispatch(request, env) {
     if (url.pathname === "/api/my-spots" && request.method === "GET") return listMySpots(request, env);
     // 高德能力代理：客户端不持有 Web 服务 Key，避免密钥泄露与配额被盗用
     if (url.pathname === "/api/places" && request.method === "GET") return searchPlaces(request, url, env);
+    if (url.pathname === "/api/staticmap" && request.method === "GET") return staticMap(request, url, env);
     if (url.pathname === "/api/regeo" && request.method === "GET") return reverseGeocode(request, url, env);
     // 审核结果推送：客户端（鸿蒙 App）上报 Push Token，退出登录时移除
     if (url.pathname === "/api/push-token" && request.method === "POST") return savePushToken(request, env);
@@ -897,6 +898,43 @@ async function listAdminSpots(request, url, env) {
 
 // 高德核验自检：不返回 Key 本身，只返回调用状态，用于定位自动核验为何不生效
 // 高德 POI 检索代理：网页端与 App 提交页的「搜索并定位」都走这里，登录后方可调用以防刷量
+// 高德静态地图代理：把推荐路线渲染成一张 PNG。前端用 <img> 展示，
+// 彻底绕开「同页面第二个 JS 地图实例」的渲染差异问题
+async function staticMap(request, url, env) {
+  const user = await authenticatedUser(request, env);
+  if (!user) return json({ error: "请登录后使用" }, 401, env);
+  if (!env.AMAP_WEB_KEY) return json({ error: "静态地图未启用（未配置高德 Key）" }, 503, env);
+  let points = [];
+  try {
+    const raw = JSON.parse(url.searchParams.get("pts") || "[]");
+    points = (Array.isArray(raw) ? raw : [])
+      .map((point) => ({ lng: Number(point.lng), lat: Number(point.lat) }))
+      .filter((point) => Number.isFinite(point.lng) && Number.isFinite(point.lat))
+      .slice(0, 9);
+  } catch { points = []; }
+  if (points.length < 2) return json({ error: "至少需要 2 个坐标点" }, 400, env);
+  const rate = await consumeRateLimit(env, "staticmap", rateIdentity(request, user), 30);
+  if (!rate.allowed) return json({ error: "路线图生成过于频繁，请稍后再试" }, 429, env);
+  const lats = points.map((point) => point.lat);
+  const lngs = points.map((point) => point.lng);
+  const center = { lat: (Math.min(...lats) + Math.max(...lats)) / 2, lng: (Math.min(...lngs) + Math.max(...lngs)) / 2 };
+  const span = Math.max(Math.max(...lats) - Math.min(...lats), (Math.max(...lngs) - Math.min(...lngs)) * 0.8);
+  const zoom = span > 0.5 ? 10 : span > 0.2 ? 11 : span > 0.1 ? 12 : span > 0.05 ? 13 : 14;
+  const labels = "123456789";
+  const markers = points.map((point, index) => `mid,0x2F80ED,${labels[index]}:${point.lng},${point.lat}`).join("|");
+  const pathLine = `5,0x2F80ED,1,:` + points.map((point) => `${point.lng},${point.lat}`).join(";");
+  const params = new URLSearchParams({ location: `${center.lng},${center.lat}`, zoom: String(zoom), size: "750*300", scale: "2", markers, paths: pathLine, key: env.AMAP_WEB_KEY });
+  try {
+    const response = await fetchWithTimeout(`https://restapi.amap.com/v3/staticmap?${params}`, 6000);
+    const contentType = response.headers.get("Content-Type") || "";
+    if (!response.ok || !contentType.includes("image")) return json({ error: "路线图生成失败，请稍后重试" }, 502, env);
+    // 代理返回图片：Key 不暴露给前端
+    return new Response(await response.arrayBuffer(), { headers: { "Content-Type": contentType, "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff" } });
+  } catch {
+    return json({ error: "路线图服务异常，请稍后重试" }, 502, env);
+  }
+}
+
 async function searchPlaces(request, url, env) {
   const user = await authenticatedUser(request, env);
   if (!user) return json({ error: "请登录后使用地址检索" }, 401, env);
