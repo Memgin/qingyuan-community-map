@@ -489,6 +489,29 @@ function highlightSpots(ids) {
 
 /* ---------------- 推荐路线：把推荐点位按地理顺序连成游览线路 ---------------- */
 let routeOverlay = { polyline: null, badges: [] };
+// AI 向导区内嵌小地图：懒加载，首次推荐时创建
+let guideMap = null;
+let guideRouteOverlay = { polyline: null, badges: [] };
+
+function ensureGuideMap() {
+  const container = document.querySelector("#guideMap");
+  if (!container) return null;
+  // hidden 状态下容器尺寸为 0，必须先显示再初始化地图实例
+  if (container.hidden) container.hidden = false;
+  if (!guideMap) {
+    guideMap = new AMap.Map("guideMap", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D" });
+  }
+  return guideMap;
+}
+
+function clearGuideRoute() {
+  if (!guideMap) return;
+  if (guideRouteOverlay.polyline) { guideMap.remove(guideRouteOverlay.polyline); guideRouteOverlay.polyline = null; }
+  guideRouteOverlay.badges.forEach((badge) => guideMap.remove(badge));
+  guideRouteOverlay.badges = [];
+  const container = document.querySelector("#guideMap");
+  if (container) container.hidden = true;
+}
 
 function clearRoute() {
   if (routeOverlay.polyline) { map.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
@@ -498,6 +521,7 @@ function clearRoute() {
   const orderText = document.querySelector("#routeOrder");
   if (clearButton) clearButton.hidden = true;
   if (orderText) { orderText.hidden = true; orderText.textContent = ""; }
+  clearGuideRoute();
 }
 
 // 最近邻贪心：从第一个点出发依次连最近的未访问点，形成顺路的游览顺序
@@ -535,6 +559,17 @@ function drawRoute(spots) {
   if (orderText) { orderText.hidden = false; orderText.textContent = `🧭 推荐路线：${ordered.map((spot, index) => `${index + 1}. ${spot.name}`).join(" → ")}`; }
   const clearButton = document.querySelector("#clearRouteButton");
   if (clearButton) clearButton.hidden = false;
+  // 向导区内嵌小地图：同样的路线再画一份，直接在推荐结果下方可视化
+  const gmap = ensureGuideMap();
+  if (!gmap) return;
+  guideRouteOverlay.polyline = new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true, zIndex: 80 });
+  gmap.add(guideRouteOverlay.polyline);
+  ordered.forEach((spot, index) => {
+    const badge = new AMap.Marker({ position: [spot.lng, spot.lat], content: `<div class="route-badge">${index + 1}</div>`, offset: new AMap.Pixel(-13, -40), zIndex: 110 });
+    gmap.add(badge);
+    guideRouteOverlay.badges.push(badge);
+  });
+  gmap.setFitView(null, false, [40, 40, 40, 40]);
 }
 
 document.querySelector("#clearRouteButton").addEventListener("click", () => {
