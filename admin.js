@@ -43,7 +43,7 @@ async function loadCorrections() {
     const payload = await request("/admin/corrections");
     const corrections = payload.data || [];
     if (!corrections.length) { correctionList.textContent = "暂无待审核的纠偏申请。"; return; }
-    correctionList.innerHTML = corrections.map((item) => `<div class="admin-card"><div><h2>${item.name} <small>#${item.spot_id} · ${item.username || "匿名用户"}</small></h2><p>当前：${item.old_lat}, ${item.old_lng}<br>纠偏至：${item.new_lat}, ${item.new_lng}<br>${item.address || ""} · ${item.created_at}</p></div><div class="admin-actions"><button class="approve" data-correction-id="${item.id}" data-action="apply" type="button">同意移动</button><button class="reject" data-correction-id="${item.id}" data-action="reject" type="button">驳回</button></div></div>`).join("");
+    correctionList.innerHTML = corrections.map((item) => `<div class="admin-card"><div><h2>${escapeHTML(item.name)} <small>#${escapeHTML(item.spot_id)} · ${escapeHTML(item.username || "匿名用户")}</small></h2><p>当前：${escapeHTML(item.old_lat)}, ${escapeHTML(item.old_lng)}<br>纠偏至：${escapeHTML(item.new_lat)}, ${escapeHTML(item.new_lng)}<br>${escapeHTML(item.address || "")} · ${escapeHTML(item.created_at)}</p></div><div class="admin-actions"><button class="approve" data-correction-id="${escapeHTML(item.id)}" data-action="apply" type="button">同意移动</button><button class="reject" data-correction-id="${escapeHTML(item.id)}" data-action="reject" type="button">驳回</button></div></div>`).join("");
     correctionList.querySelectorAll("[data-correction-id]").forEach((button) => button.addEventListener("click", async () => {
       button.disabled = true;
       try {
@@ -72,13 +72,16 @@ async function loadResetRequests() {
     const payload = await request("/admin/reset-requests");
     const requests = payload.data || [];
     if (!requests.length) { resetRequestList.textContent = "暂无待审批的申请。"; return; }
-    resetRequestList.innerHTML = requests.map((item) => `<div class="token-row"><strong>${item.username}</strong><span>${item.note || "（无补充说明）"}</span><small>${item.created_at}</small><button class="primary-button" data-approve-reset="${item.id}" data-approve-name="${item.username}" type="button">同意（重置为 12345）</button><button class="delete-button" data-dismiss-reset="${item.id}" type="button">删除记录</button></div>`).join("");
+    // note / username 由任意访客填写，必须转义后再插入 HTML。
+    // 未转义时构成存储型 XSS：攻击者提交带脚本的申请，管理员一打开后台即执行，
+    // 可读取 sessionStorage 中的管理密钥并外传，导致管理后台沦陷
+    resetRequestList.innerHTML = requests.map((item) => `<div class="token-row"><strong>${escapeHTML(item.username)}</strong><span>${escapeHTML(item.note || "（无补充说明）")}</span><small>${escapeHTML(item.created_at)}</small><button class="primary-button" data-approve-reset="${escapeHTML(item.id)}" data-approve-name="${escapeHTML(item.username)}" type="button">同意并下发随机临时密码</button><button class="delete-button" data-dismiss-reset="${escapeHTML(item.id)}" type="button">删除记录</button></div>`).join("");
     resetRequestList.querySelectorAll("[data-approve-reset]").forEach((button) => button.addEventListener("click", async () => {
-      if (!window.confirm(`确认同意 ${button.dataset.approveName} 的重置申请？其密码将重置为 12345，且登录后必须设置新密码。`)) return;
+      if (!window.confirm(`确认同意 ${button.dataset.approveName} 的重置申请？系统将生成一次性随机临时密码并推送到其设备，登录后必须设置新密码。`)) return;
       button.disabled = true;
       try {
         const payload = await request(`/admin/reset-requests/${button.dataset.approveReset}/handle`, { method: "POST" });
-        showToast(payload.delivered === false ? `已重置，但推送可能未送达，请务必人工告知 ${payload.username} 临时密码 12345` : `已重置并推送通知给 ${payload.username}`);
+        showToast(payload.delivered === false ? `已重置，但推送未送达，请通过其他渠道把返回的临时密码告知 ${payload.username}` : `已重置，临时密码已推送给 ${payload.username}`);
         loadResetRequests();
       } catch (error) {
         showToast(error.message);

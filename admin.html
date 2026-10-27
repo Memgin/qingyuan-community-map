@@ -81,7 +81,7 @@
       <h2 style="margin-top:28px">手动重置密码</h2>
       <p class="panel-desc">线下核实身份后使用：密码重置为 12345 并踢掉该用户所有登录，需人工告知用户临时密码。</p>
       <div class="panel-tools"><input id="resetUsername" type="text" placeholder="要重置的用户名"><button class="primary-button" id="resetPasswordButton" type="button">重置密码</button></div>
-      <pre id="resetResult">重置后流程：临时密码 12345 → 用户登录 → 系统强制要求设置新密码。</pre>
+      <pre id="resetResult">重置后流程：生成一次性随机临时密码 → 推送到用户设备 → 用户登录 → 系统强制要求设置新密码。推送未送达时页面会显示明文，请线下转告。</pre>
     </section>
 
     <section class="admin-panel" id="panel-corrections" hidden>
@@ -99,6 +99,6 @@
     </section>
   </main>
   <div class="toast" id="adminToast"></div>
-  <script src="admin.js?v=20261025-7"></script>
+  <script src="admin.js?v=20261025-9"></script>
 </body>
 </html>

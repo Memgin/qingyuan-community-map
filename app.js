@@ -321,7 +321,9 @@ async function loadPublicSpots() {
 }
 
 async function loadMySpots() {
-  const response = await fetch(`${API_BASE}/my-spots`, { headers: { "X-Owner-Token": ownerToken } });
+  // 后端 /api/my-spots 按登录态（Authorization）识别用户，X-Owner-Token 仅作兼容保留，
+  // 缺少 Authorization 会直接 401，导致「我的提交」始终加载失败
+  const response = await fetch(`${API_BASE}/my-spots`, { headers: authHeaders({ "X-Owner-Token": ownerToken }) });
   if (!response.ok) throw new Error("无法加载我的提交");
   const payload = await response.json();
   return payload.data || [];
@@ -550,7 +552,9 @@ function renderList() {
     const item = categories[spot.category];
     const likeCount = state.likes[spot.id] ?? spot.likes ?? 0;
     // liked 由后端按账号返回，保证网页与 App 的点赞状态一致
-    const liked = spot.liked === true || Number(state.likes[spot.id] || 0) > 0;
+    // 是否已点赞只认后端按账号返回的 liked 字段，保证网页与 App 跨端一致。
+    // 原实现用 `Number(state.likes[id]) > 0` 兜底，但 state.likes 存的是点赞总数
+    const liked = spot.liked === true;
     const likes = `${liked ? "♥" : "♡"} ${likeCount}`;
     const image = spot.image_url ? `<img class="spot-image" src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">` : "";
     // 提交者：编辑（分类/主图）；其他登录用户：补图（往照片墙追加）
@@ -573,7 +577,11 @@ function renderList() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "点赞失败");
       if (payload.liked === false) { showToast("你已经点过赞了"); return; }
-      state.likes[id] = payload.likes; localStorage.setItem("qingyuan-likes", JSON.stringify(state.likes)); renderList();
+      state.likes[id] = payload.likes; localStorage.setItem("qingyuan-likes", JSON.stringify(state.likes));
+      // 同步当前列表里的点赞态：后端 liked 要等下次请求才带回，这里先本地置位避免 UI 回退
+      const target = state.spots.find((item) => String(item.id) === String(id));
+      if (target) target.liked = true;
+      renderList();
     } catch {
       showToast("点赞失败，请稍后重试");
     }

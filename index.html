@@ -116,7 +116,7 @@
       <button class="auth-switch" id="authSwitchButton" type="button">没有账号？注册一个</button><button class="auth-switch" id="forgotPasswordButton" type="button">忘记密码？</button><p class="form-message" id="authMessage" role="status"></p>
 
       <section id="forgotPanel" hidden>
-        <p class="modal-intro">提交后等待管理员审核。审核通过后你的临时密码为 <strong>12345</strong>，用它登录时系统会要求你立即设置新密码。</p>
+        <p class="modal-intro">提交后等待管理员审核。审核通过后一次性随机临时密码会推送到你之前登录过的设备，用它登录时系统会要求你立即设置新密码。</p>
         <form id="forgotForm"><label>你的用户名<input id="forgotUsername" type="text" required maxlength="24"></label><label>补充说明（可选）<input id="forgotNote" type="text" maxlength="200" placeholder="例如：注册时间、常用地点，方便管理员确认身份"></label><button class="primary-button full-width" type="submit" id="forgotSubmitButton">提交申请</button><p class="form-message" id="forgotMessage" role="status"></p><button class="auth-switch" id="forgotBackButton" type="button">← 返回登录</button></form>
       </section>
     </section>
@@ -137,6 +137,6 @@
 
   <script>window._AMapSecurityConfig = { securityJsCode: "23bdb3356d33258cc84de4c5ec773e5a" };</script>
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
-  <script src="app.js?v=20261025-16"></script>
+  <script src="app.js?v=20261025-18"></script>
 </body>
 </html>
