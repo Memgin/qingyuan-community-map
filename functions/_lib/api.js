@@ -294,31 +294,12 @@ async function register(request, env) {
   const body = await request.json();
   if (!body.username || !/^[\w\u4e00-\u9fff-]{2,24}$/.test(body.username)) return json({ error: "用户名需为 2-24 个字符（支持中文、字母、数字、下划线）" }, 400, env);
   if (typeof body.password !== "string" || body.password.length < 8 || body.password.length > 128 || !/[A-Za-z]/.test(body.password) || !/\d/.test(body.password)) return json({ error: "密码至少 8 位，需同时包含字母和数字" }, 400, env);
-  // Turnstile 人机验证：配置了 secret 时，网页端一律强制校验；
-  // 鸿蒙 App 原生注册以 X-Client-Type: app 声明，继续走下方的免验证降级限额。
-  // 原实现 `env.TURNSTILE_SECRET && body.cfToken` 使任何不带 token 的请求都能整段跳过验证
-  const isNativeApp = (request.headers.get("X-Client-Type") || "").trim().toLowerCase() === "app";
-  if (env.TURNSTILE_SECRET && !isNativeApp) {
-    try {
-      const verifyResponse = await fetchWithTimeout("https://challenges.cloudflare.com/turnstile/v0/siteverify", 8000, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: String(body.cfToken) }).toString()
-      });
-      const verify = await verifyResponse.json().catch(() => ({ success: false }));
-      if (!verify.success) return json({ error: "人机验证未通过，请刷新页面重试" }, 400, env);
-    } catch {
-      return json({ error: "人机验证服务异常，请稍后重试" }, 502, env);
-    }
-  }
-  // 注册 IP 频控：同 IP 24 小时最多 3 个账号；未通过人机验证的（App 原生注册/脚本直连）每天仅 1 个
+  // Turnstile 已停用（其 api.js 注入的 CSP 会拦截高德渲染器，导致向导区小地图空白）。
+  // 注册防刷由 IP 注册限额兜底：同 IP 24 小时最多 3 个账号。
   const regIp = request.headers.get("CF-Connecting-IP") || "unknown";
   const regCutoff = new Date(Date.now() - 86400000).toISOString().slice(0, 19).replace("T", " ");
-  const regStat = await env.DB.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN has_token = 0 THEN 1 ELSE 0 END) AS no_token FROM registrations WHERE ip = ? AND created_at > ?").bind(regIp, regCutoff).first().catch(() => null);
-  if (regStat) {
-    if (Number(regStat.total || 0) >= 3) return json({ error: "该网络今日注册次数已达上限，请明天再试" }, 429, env);
-    if (!body.cfToken && Number(regStat.no_token || 0) >= 1) return json({ error: "该网络今日免验证注册名额已用完，请明天再试" }, 429, env);
-  }
+  const regStat = await env.DB.prepare("SELECT COUNT(*) AS total FROM registrations WHERE ip = ? AND created_at > ?").bind(regIp, regCutoff).first().catch(() => null);
+  if (regStat && Number(regStat.total || 0) >= 3) return json({ error: "该网络今日注册次数已达上限，请明天再试" }, 429, env);
   const exists = await env.DB.prepare("SELECT id FROM users WHERE username = ?").bind(body.username.trim()).first();
   if (exists) return json({ error: "用户名已存在" }, 409, env);
   const salt = crypto.randomUUID();

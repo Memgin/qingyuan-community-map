@@ -224,23 +224,12 @@ function setupReviewReminder() {
   holder.insertBefore(button, holder.firstChild);
 }
 
-/* --------------------------- Turnstile 人机验证 --------------------------- */
-// 填入 Cloudflare Turnstile 的 Site Key 即启用（后端需同步配置 TURNSTILE_SECRET）；
-// 留空则不渲染验证组件，注册走服务端的免验证限额（同 IP 每天仅 1 个账号）
-const TURNSTILE_SITE_KEY = "0x4AAAAAAFlIsuJHRZUtIttJ";
-
-if (TURNSTILE_SITE_KEY) {
-  const box = document.querySelector("#turnstileBox");
-  if (box) {
-    const script = document.createElement("script");
-    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-    script.async = true;
-    script.onload = () => {
-      window.turnstile.render(box, { sitekey: TURNSTILE_SITE_KEY, theme: "light", language: "zh-cn" });
-    };
-    document.head.appendChild(script);
-  }
-}
+/* --------------------------- Turnstile 人机验证（已停用） ---------------------------
+ * Turnstile 的 api.js 会向页面注入 connect-src 限定的 CSP，拦截高德渲染器的
+ * data: 连接，导致向导区小地图空白。注册防刷已由 IP 注册限额（3 账号/天）兜底，
+ * 故移除 Turnstile；如需恢复人机验证，需先解决其 CSP 与地图渲染的冲突。
+------------------------------------------------------------------------------------ */
+const TURNSTILE_SITE_KEY = "";
 
 function showUpdateBanner(count) {
   let banner = document.querySelector("#updateBanner");
@@ -1056,8 +1045,7 @@ document.querySelector("#forceChangeForm").addEventListener("submit", async (eve
 });
 document.querySelector("#authForm").addEventListener("submit", async (event) => {
   event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget));
-  // Turnstile 人机验证 token（注册时随表单提交；未启用 site key 时为空串走免验证限额）
-  if (state.authMode === "register" && window.turnstile) data.cfToken = turnstile.getResponse() || "";
+  // Turnstile 已停用（见上方说明）：注册防刷由后端 IP 注册限额兜底
   const endpoint = state.authMode === "login" ? "login" : "register"; const message = document.querySelector("#authMessage"); message.textContent = "处理中……";
   try { const response = await fetch(`${API_BASE}/auth/${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "请求失败"); localStorage.setItem(AUTH_TOKEN_KEY, payload.token); state.currentUser = payload.user; authBackdrop.hidden = true; updateAuthUI(); if (payload.mustChangePassword) { location.href = location.pathname + "?forceChange=1"; return; } await loadMaps(); showToast(`欢迎，${payload.user.username}`); } catch (error) { message.textContent = error.message; }
 });
