@@ -26,9 +26,19 @@
 - **私人地图收藏**：把喜欢的点位收进自己的地图
 - **我的提交**：查看自己提交的点位及其审核状态
 - **位置纠偏**：发现点位坐标偏了？登录后在地图弹窗点「位置纠偏」，把蓝色标记拖到正确位置提交，管理员确认后全端生效
+- **社区照片墙**：图钉弹窗内展示社区成员补充的照片，任何登录用户可「补图」
+
+### 大众点评与评分
+- **评分展示**：列表卡片、地图弹窗、全部地点页均显示星级 + 均分 + 点评条数（列表接口子查询聚合，无二次请求）
+- **地点详情弹窗**：封面图 + 评分摘要 + 全部点评列表 + 发表/修改点评
+- **一人一店一条**：再次提交即修改原点评，可随时切换匿名 / 实名；作者本人可删除
+- **匿名点评**：显示「匿名用户」+ 模糊头像；后端对该条记录**不返回任何作者字段**（无 user_id / 昵称 / 头像），无法反查账号
+- **实名点评**：展示昵称 + 头像，点击头像进入该用户公开主页（只聚合非匿名点评）
+- **个人资料**：顶栏「⚙ 我的资料」设置昵称（2-24 字）与头像（≤2MB，复用上传接口），实名点评同步展示
+- **写入限流**：每账号每小时 20 条
 
 ### 账号与安全
-- **注册 / 登录**：用户名 + 密码，PBKDF2 加盐哈希存储；注册需通过 Turnstile 人机验证（未启用时走免验证限额）
+- **注册 / 登录**：用户名 + 密码，PBKDF2 加盐哈希存储；注册在独立页 `register.html` 完成，需通过 Turnstile 人机验证（其脚本注入的 CSP 会干扰地图渲染，故与主页隔离）；App 原生注册走免验证限额（同 IP 每天 1 个）
 - **密码策略**：仅注册和设置新密码时校验（8 位以上含字母数字），登录只做比对，不追溯旧密码
 - **找回密码全流程**（全自动闭环）：
   1. 用户提交重置申请（防用户名枚举：无论账号是否存在返回相同文案）
@@ -44,6 +54,9 @@
 
 ### AI 智能推荐
 - 用自然语言提问（如「周末带孩子去哪玩」），返回中文推荐文案并**在地图上高亮对应点位**
+- 向导区下方内嵌**路线小地图**：推荐点位按最近邻贪心排序，蓝色虚线连成游览路线 + 序号标记（后续路线编辑的载体）
+- **季节推荐**：按当前月份把应季主题（春赏花 / 夏避暑 / 秋登高 / 冬食补）排最前并高亮，一键触发推荐
+- **结果缓存**：相同需求 + 相近视野（约 1km 精度）24 小时内直接复用缓存结果，不调模型、不计限流额度——热门问题零配额消耗
 - 接入智谱 `glm-4.7-flash`，主模型限流时自动降级到备用模型，25 秒超时保护
 
 ### 管理后台
@@ -54,6 +67,9 @@
 - **④ 账号与密码**：密码重置申请审批（一键同意并推送临时密码；无法安全送达的可删除转人工）、手动重置密码
 - **⑤ 位置纠偏**：审批用户提交的坐标修正（新旧坐标对照，同意即移动点位）
 - **⑥ 诊断工具**：高德接口自检（不暴露 Key）
+
+### 界面
+- **液态玻璃**：顶栏与地点详情弹窗接入 [simple-liquid-glass](https://github.com/lucaperullo/simple-liquid-glass)（CDN 锁定 5.6.0，Web Component 纯视觉层，`pointer-events: none` 不拦截交互，CDN 失败自动降级为半透明底色）
 
 ### 多端同步与离线能力
 | 能力 | 说明 |
@@ -127,7 +143,7 @@ npx wrangler pages secret put PUSH_CLIENT_SECRET # 华为推送 Client Secret
 npx wrangler d1 execute qingyuan-community-map --remote --file=worker/schema.sql
 ```
 
-按 `worker/` 下的迁移脚本顺序依次执行（auth → owner → moderation → quotas → category-school …）。根目录迁移脚本按文件名时间顺序执行，最新一批：`migration-security.sql`（登录防护/会话）、`migration-registration.sql`（注册限额）、`migration-pwd-flow.sql`（密码重置申请与强制改密）、`migration-push.sql`（推送 Token）、`migration-photos.sql`（点位配图）、`migration-correction.sql`（位置纠偏）。
+按 `worker/` 下的迁移脚本顺序依次执行（auth → owner → moderation → quotas → category-school …）。根目录迁移脚本按文件名时间顺序执行，最新一批：`migration-security.sql`（登录防护/会话）、`migration-registration.sql`（注册限额）、`migration-pwd-flow.sql`（密码重置申请与强制改密）、`migration-push.sql`（推送 Token）、`migration-photos.sql`（点位配图）、`migration-correction.sql`（位置纠偏）、`migration-reviews.sql`（大众点评与评分、用户昵称头像）、`migration-ai-cache.sql`（AI 推荐结果缓存）。
 
 ### 4. 部署
 
@@ -145,20 +161,24 @@ npx wrangler pages deploy . --project-name qymap --branch main
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/spots?page=&limit=&category=&q=&since=&fields=` | 点位列表，返回 `data` 与 `total`；`fields=map` 只返回坐标等轻量字段 |
+| GET | `/spots?page=&limit=&category=&q=&since=&fields=` | 点位列表，返回 `data` 与 `total`（附带 `avg_rating` / `review_count`，未迁移旧库自动降级）；`fields=map` 返回图钉轻量字段 |
 | POST | `/spots` | 提交点位（需登录 + `X-Owner-Token`），支持 `client_token` 幂等 |
 | DELETE | `/spots/:id` | 删除自己提交的点位 |
 | POST | `/spots/:id/like` | 点赞（登录时按账号记录） |
 | POST | `/spots/:id/report` | 举报 |
 | POST | `/spots/:id/correction` | 位置纠偏（需登录，提交坐标修正建议） |
+| GET / POST | `/spots/:id/reviews` | 点评列表 + 评分统计 / 发表或修改点评（UPSERT，一人一店一条，需登录） |
+| DELETE | `/reviews/:id` | 删除自己的点评（匿名点评仅作者可删） |
 | GET | `/my-spots` | 我提交的点位 |
 
 ### 用户
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| POST | `/auth/register` `/auth/login` `/auth/logout` | 注册 / 登录 / 退出 |
-| GET | `/auth/me` | 当前用户（含 `mustChangePassword` 标志） |
+| POST | `/auth/register` `/auth/login` `/auth/logout` | 注册（网页端强制 Turnstile）/ 登录 / 退出 |
+| POST | `/auth/profile` | 设置昵称与头像（需登录） |
+| GET | `/users/:id/profile` | 用户公开主页（仅聚合非匿名点评，匿名内容无法反查） |
+| GET | `/auth/me` | 当前用户（含 `mustChangePassword` 标志、昵称头像） |
 | POST | `/auth/change-password` | 设置新密码（临时密码登录后强制调用） |
 | POST | `/auth/reset-request` | 提交找回密码申请（无需登录） |
 | POST / DELETE | `/push-token` | 上报 / 注销设备推送 Token（需登录） |
@@ -191,17 +211,20 @@ npx wrangler pages deploy . --project-name qymap --branch main
 ```
 .
 ├── index.html          前端主页
-├── all.html            全部地点页（网格浏览）
-├── app.js              前端逻辑（地图、列表、提交、同步）
+├── register.html       独立注册页（Turnstile 与主页隔离）
+├── all.html            全部地点页（网格浏览 + 评分入口）
+├── app.js              前端逻辑（地图、列表、点评、提交、同步）
+├── all.js              全部地点页逻辑
+├── demo-data.js        本地演示数据兜底（仅 localhost 无后端时启用）
 ├── admin.html          管理后台页面
 ├── admin.js            管理后台逻辑
 ├── favicon.svg         网站图标（清远山水）
-├── style.css           样式
+├── style.css           样式（含大众点评与液态玻璃样式块）
 ├── functions/          Cloudflare Pages Functions
 │   ├── api/[[path]].js 路由入口
 │   └── _lib/api.js     全部接口实现
 ├── worker/             数据库 schema 与迁移脚本
-├── *_*.sql             根目录迁移脚本（设施导入、清理、同步）
+├── *_*.sql             根目录迁移脚本（点评、AI 缓存、设施导入、同步等）
 ├── wrangler.toml       Cloudflare 配置
 └── *.md                项目文档
 ```
@@ -224,11 +247,16 @@ npx wrangler pages deploy . --project-name qymap --branch main
 | --- | --- |
 | `清远社区共享地图项目 · 完整实施规划文档.md` | 需求、功能清单、实现记录、历史问题与排查结论 |
 | `鸿蒙期末项目可行性评估.md` | 将本项目改造为 HarmonyOS（DevEco Studio）应用的可行性评估与完整任务清单 |
+| `功能总结-点评与评分.md` | 地点评分 + 大众点评功能的实现细节、接口清单与验证记录 |
+| `修复记录-向导区地图不显示.md` | 向导区小地图空白问题的根因（flex 收缩）与修复过程 |
+| `aiguide-待完成功能.md` | AI 向导地图未完成功能清单（路线编辑、持久化等） |
 
 ---
 
 ## 待办
 
-- AI 推荐体验优化：热门问题缓存、限流时的排队重试提示
+- AI 推荐体验优化：限流时的排队重试提示（热门问题缓存已完成）
+- 推荐路线编辑：在向导区小地图上拖拽排序 / 增删站点 / 指定起终点（`aiguide-待完成功能.md`）
+- AI 推荐结构化返回点位 id（替代当前的名称字符串匹配，消除漏匹配）
 - HarmonyOS 客户端：找回密码申请入口、登录后 `mustChangePassword` 检测与强制改密页（与网页端对齐）
 - 推送通知的鸿蒙端点击跳转深链
