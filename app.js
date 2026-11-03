@@ -65,12 +65,21 @@ function exitCorrectionMode() {
   correctionBar.hidden = true;
 }
 
-// InfoWindow 内容是字符串模板，用事件委托接「位置纠偏」点击
+// InfoWindow 内容是字符串模板，用事件委托接「位置纠偏 / 查看点评 / 用户主页 / 删除点评」点击
 document.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-correct-id]");
-  if (!button) return;
-  const spot = state.mapSpots.find((item) => String(item.id) === button.dataset.correctId);
-  if (spot) enterCorrectionMode(spot);
+  const correctButton = event.target.closest("[data-correct-id]");
+  if (correctButton) {
+    const spot = state.mapSpots.find((item) => String(item.id) === correctButton.dataset.correctId);
+    if (spot) enterCorrectionMode(spot);
+    return;
+  }
+  const detailButton = event.target.closest("[data-detail-id]");
+  if (detailButton) { openSpotDetail(detailButton.dataset.detailId); return; }
+  // 仅非匿名点评带 data-user-id；匿名点评没有作者信息，永远无法进入任何用户主页
+  const userButton = event.target.closest("[data-user-id]");
+  if (userButton) { openUserProfile(userButton.dataset.userId); return; }
+  const reviewDeleteButton = event.target.closest("[data-review-delete-id]");
+  if (reviewDeleteButton) { deleteMyReview(reviewDeleteButton.dataset.reviewDeleteId); }
 });
 
 document.querySelector("#correctionSubmit").addEventListener("click", async () => {
@@ -268,11 +277,47 @@ function actorHeaders(extra = {}) { let token = localStorage.getItem(ACTOR_TOKEN
 
 const ownerToken = getOwnerToken();
 
+/* ---------------- API 访问层：本地纯静态预览（无后端）时自动切换演示数据 ----------------
+ * demo-data.js 提供演示数据与接口模拟。只有当真实 /api 请求不可达（网络错误，或本地
+ * 静态服务器对 /api 返回 404）且页面运行在 localhost / 127.0.0.1 时才启用，
+ * 线上部署（Cloudflare Pages Functions 可用）不受任何影响。 */
+let demoMode = false;
+function canFallbackToDemo() { return Boolean(window.QYDemo) && /^(localhost|127\.0\.0\.1)$/.test(location.hostname); }
+function showDemoBadge() {
+  if (document.querySelector(".demo-badge")) return;
+  const badge = document.createElement("div");
+  badge.className = "demo-badge";
+  badge.textContent = "本地演示模式：内置演示数据，可完整体验点评功能";
+  document.body.appendChild(badge);
+}
+async function apiFetch(path, options = {}) {
+  if (demoMode) return window.QYDemo.handle(path, options);
+  try {
+    const response = await fetch(path, options);
+    // 本地静态服务器（python http.server 等）对 /api/* 一律返回 404 HTML 页；
+    // 真实后端的 404 是 JSON（如"地点不存在"），两者必须区分开
+    const contentType = response.headers.get("Content-Type") || "";
+    if (response.status === 404 && !contentType.includes("application/json") && canFallbackToDemo()) {
+      demoMode = true;
+      showDemoBadge();
+      return window.QYDemo.handle(path, options);
+    }
+    return response;
+  } catch (error) {
+    if (canFallbackToDemo()) {
+      demoMode = true;
+      showDemoBadge();
+      return window.QYDemo.handle(path, options);
+    }
+    throw error;
+  }
+}
+
 // 合并远程收录点与本地默认点/待审核提交/周边设施，已核验的覆盖未核验的同名同分类点，避免登录或刷新后默认点丢失。
 // 地图图钉需要的轻量数据：一次拉取坐标，避免列表分页后地图只剩当前页的点
 async function loadMapSpots() {
   try {
-    const response = await fetch(`${API_BASE}/spots?fields=map&limit=500`);
+    const response = await apiFetch(`${API_BASE}/spots?fields=map&limit=500`);
     if (!response.ok) return;
     const payload = await response.json();
     if (Array.isArray(payload.data)) {
@@ -292,7 +337,7 @@ async function loadListPage() {
   if (state.filter !== "all") params.set("category", state.filter);
   if (state.query) params.set("q", state.query);
   try {
-    const response = await fetch(`${API_BASE}/spots?${params}`);
+    const response = await apiFetch(`${API_BASE}/spots?${params}`);
     if (!response.ok) return;
     const payload = await response.json();
     if (Array.isArray(payload.data)) {
@@ -579,19 +624,26 @@ function renderFilters() {
   container.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => { state.filter = button.dataset.filter; state.page = 1; refreshList(); }));
 }
 
+// 地图弹窗模板：评分 + 点评入口 + 基础信息 + 位置纠偏 + 照片墙（wallHTML 由调用方填充）
+function popupContentHTML(spot, wallHTML) {
+  const item = categories[spot.category];
+  const image = spot.image_url ? `<img src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">` : "";
+  const address = escapeHTML(spot.address || "地图上的目的地");
+  const description = escapeHTML(spot.description || "");
+  // 地图图钉是轻量数据（fields=map），description 可能为空，必须兜底
+  const ratingLine = spot.review_count
+    ? `<div class="popup-rating"><span class="stars">${starsHTML(spot.avg_rating)}</span><small>${Number(spot.avg_rating).toFixed(1)} · ${spot.review_count} 条点评</small><button class="detail-link" data-detail-id="${spot.id}" type="button">查看点评 →</button></div>`
+    : `<div class="popup-rating"><button class="detail-link" data-detail-id="${spot.id}" type="button">评分与点评 →</button></div>`;
+  return `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small>${ratingLine}<a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button">📍 位置纠偏</button><p>${description}</p>${wallHTML}</div>`;
+}
+
 function renderMarkers() {
   state.markers.forEach((marker) => marker.setMap(null));
   state.markers = visibleSpots().map((spot) => {
-    const item = categories[spot.category];
     const marker = new AMap.Marker({ position: [spot.lng, spot.lat], content: markerIcon(spot.category, state.highlightIds.has(String(spot.id))), offset: new AMap.Pixel(-14, -29), title: spot.name });
     marker.setMap(map);
     marker.on("click", () => {
-      const image = spot.image_url ? `<img src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">` : "";
-      const address = escapeHTML(spot.address || "地图上的目的地");
-      // 地图图钉是轻量数据（fields=map），description 可能为空，必须兜底
-      const description = escapeHTML(spot.description || "");
-      const base = `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small><a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button">📍 位置纠偏</button><p>${description}</p><div class="popup-wall"><span class="field-note">照片加载中…</span></div></div>`;
-      const infoWindow = new AMap.InfoWindow({ content: base, offset: new AMap.Pixel(0, -35), closeWhenClickMap: true });
+      const infoWindow = new AMap.InfoWindow({ content: popupContentHTML(spot, '<div class="popup-wall"><span class="field-note">照片加载中…</span></div>'), offset: new AMap.Pixel(0, -35), closeWhenClickMap: true });
       infoWindow.open(map, marker.getPosition());
       // 照片墙异步补充：不阻塞弹窗打开，取到后整体重设内容（导航与分类保留在模板里）
       loadPopupWall(spot, infoWindow);
@@ -603,18 +655,13 @@ function renderMarkers() {
 // 拉取点位社区照片并重绘地图弹窗；spot 来自闭包，字段与列表一致
 async function loadPopupWall(spot, infoWindow) {
   try {
-    const response = await fetch(`${API_BASE}/spots/${spot.id}/photos`);
+    const response = await apiFetch(`${API_BASE}/spots/${spot.id}/photos`);
     const payload = await response.json();
     const photos = Array.isArray(payload.data) ? payload.data : [];
-    const item = categories[spot.category];
-    const image = spot.image_url ? `<img src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">` : "";
-    const address = escapeHTML(spot.address || "地图上的目的地");
-    const description = escapeHTML(spot.description || "");
     const wall = photos.length
       ? `<div class="popup-wall">${photos.slice(0, 6).map((photo) => `<figure class="popup-wall-item"><img src="${escapeHTML(photo.url)}" alt="社区照片"><figcaption>${escapeHTML(photo.username || "社区成员")}</figcaption></figure>`).join("")}</div>`
       : `<div class="popup-wall"><span class="field-note">暂无社区照片</span></div>`;
-    const content = `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small><a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button">📍 位置纠偏</button><p>${description}</p>${wall}</div>`;
-    infoWindow.setContent(content);
+    infoWindow.setContent(popupContentHTML(spot, wall));
   } catch {
     // 照片加载失败时保留"加载中"占位，不影响基础信息展示
   }
@@ -640,9 +687,9 @@ function renderList() {
     const deleteButton = spot.isOwner ? `<button class="delete-button" data-delete-id="${spot.id}" type="button">删除</button>` : "";
     const saveButton = state.currentUser && !state.myOnly ? `<button class="save-map-button" data-map-spot-id="${spot.id}" type="button">收藏</button>` : "";
     const reportButton = !state.myOnly ? `<button class="report-button" data-report-id="${spot.id}" type="button">举报</button>` : "";
-    const statusText = spot.status === "pending" ? "待审核 · 点击查看位置" : "点击查看位置";
+    const statusText = spot.status === "pending" ? "待审核 · 点击查看位置" : "点击查看点评";
     const address = escapeHTML(spot.address || "地图上的目的地");
-    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div><a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><small>${statusText}</small><span class="card-actions">${editButton}${saveButton}${reportButton}${deleteButton}<button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button></span></div></article>`;
+    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}" data-spot-id="${spot.id}">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div>${ratingLineHTML(spot)}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><small>${statusText}</small><span class="card-actions">${editButton}${saveButton}${reportButton}${deleteButton}<button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button></span></div></article>`;
   }).join("") : '<div class="empty-state">没有找到匹配的地点，换个关键词试试。</div>';
   document.querySelector("#pageInfo").textContent = `${state.page} / ${totalPages}`;
   document.querySelector("#previousPageButton").disabled = state.page <= 1;
@@ -651,7 +698,7 @@ function renderList() {
     const id = button.dataset.likeId;
     try {
       // 带上登录态：后端会按账号记录点赞，实现网页与 App 跨端一致
-      const response = await fetch(`${API_BASE}/spots/${id}/like`, { method: "POST", headers: authHeaders(actorHeaders()) });
+      const response = await apiFetch(`${API_BASE}/spots/${id}/like`, { method: "POST", headers: authHeaders(actorHeaders()) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "点赞失败");
       if (payload.liked === false) { showToast("你已经点过赞了"); return; }
@@ -686,8 +733,11 @@ function renderList() {
   }));
   spotList.querySelectorAll(".save-map-button").forEach((button) => button.addEventListener("click", () => saveSpotToMap(button.dataset.mapSpotId)));
   spotList.querySelectorAll(".spot-card").forEach((card) => card.addEventListener("click", (event) => {
-    if (event.target.closest(".like-button")) return;
+    // 卡片上的按钮（点赞/举报/编辑等）与导航链接不触发详情
+    if (event.target.closest("button, a")) return;
     map.setZoomAndCenter(16, [Number(card.dataset.lng), Number(card.dataset.lat)], true);
+    // 点击卡片进入详情：查看评分与大众点评
+    openSpotDetail(card.dataset.spotId);
   }));
 }
 
@@ -967,14 +1017,15 @@ function showToast(message) { const toast = document.querySelector("#toast"); to
 const authBackdrop = document.querySelector("#authBackdrop");
 function openAuth() { authBackdrop.hidden = false; document.querySelector("#authMessage").textContent = ""; document.querySelector("input[name=username]").focus(); }
 function updateAuthUI() {
-  document.querySelector("#authButton").textContent = state.currentUser ? `${state.currentUser.username} · 退出` : "登录 / 注册";
+  document.querySelector("#authButton").textContent = state.currentUser ? `${state.currentUser.nickname || state.currentUser.username} · 退出` : "登录 / 注册";
   document.querySelector("#privatePanel").hidden = !state.currentUser;
+  document.querySelector("#settingsButton").hidden = !state.currentUser;
   renderList();
 }
 
 async function checkLogin() {
   if (!authToken()) return;
-  const response = await fetch(`${API_BASE}/auth/me`, { headers: authHeaders() });
+  const response = await apiFetch(`${API_BASE}/auth/me`, { headers: authHeaders() });
   if (response.ok) {
     const payload = await response.json();
     state.currentUser = payload.user;
@@ -1005,7 +1056,7 @@ async function loadMaps() {
 
 document.querySelector("#authButton").addEventListener("click", async () => {
   if (!state.currentUser) { openAuth(); return; }
-  await fetch(`${API_BASE}/auth/logout`, { method: "POST", headers: authHeaders() }); localStorage.removeItem(AUTH_TOKEN_KEY); state.currentUser = null; updateAuthUI(); showToast("已退出登录");
+  await apiFetch(`${API_BASE}/auth/logout`, { method: "POST", headers: authHeaders() }); localStorage.removeItem(AUTH_TOKEN_KEY); state.currentUser = null; updateAuthUI(); showToast("已退出登录");
 });
 document.querySelector("#closeAuthButton").addEventListener("click", () => { authBackdrop.hidden = true; });
 document.querySelector("#authSwitchButton").addEventListener("click", () => {
@@ -1069,21 +1120,24 @@ document.querySelector("#forceChangeForm").addEventListener("submit", async (eve
 document.querySelector("#authForm").addEventListener("submit", async (event) => {
   event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget));
   const message = document.querySelector("#authMessage"); message.textContent = "处理中……";
-  try { const response = await fetch(`${API_BASE}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: data.username, password: data.password }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "请求失败"); localStorage.setItem(AUTH_TOKEN_KEY, payload.token); state.currentUser = payload.user; authBackdrop.hidden = true; updateAuthUI(); if (payload.mustChangePassword) { location.href = location.pathname + "?forceChange=1"; return; } await loadMaps(); showToast(`欢迎，${payload.user.username}`); } catch (error) { message.textContent = error.message; }
+  try { const response = await apiFetch(`${API_BASE}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: data.username, password: data.password }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "请求失败"); localStorage.setItem(AUTH_TOKEN_KEY, payload.token); state.currentUser = payload.user; authBackdrop.hidden = true; updateAuthUI(); if (payload.mustChangePassword) { location.href = location.pathname + "?forceChange=1"; return; } await loadMaps(); showToast(`欢迎，${payload.user.nickname || payload.user.username}`); } catch (error) { message.textContent = error.message; }
 });
 document.querySelector("#mapForm").addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget; const name = new FormData(form).get("name"); try { const response = await fetch(`${API_BASE}/maps`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ name }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); form.reset(); await loadMaps(); showToast(`私人地图“${payload.name}”已创建`); } catch (error) { showToast(error.message || "创建失败"); } });
 render();
 loadPublicSpots();
 checkLogin();
-// 从「全部地点」页点卡片跳回时（index.html?spot=ID），定位该点位并打开弹窗
+// 从「全部地点」页点卡片跳回时（index.html?spot=ID），定位该点位并打开弹窗；
+// 带 &detail=1 时直接打开点评详情（all.html 的「点评」入口）
 const requestedSpot = new URLSearchParams(location.search).get("spot");
 if (requestedSpot) {
+  const openDetail = new URLSearchParams(location.search).has("detail");
   const waitForSpot = (tries) => {
     const spot = state.mapSpots.find((item) => String(item.id) === requestedSpot);
     if (spot) {
       map.setZoomAndCenter(16, [spot.lng, spot.lat], true);
       const marker = state.markers.find((m) => m.getTitle() === spot.name);
       if (marker) marker.emit("click");
+      if (openDetail) openSpotDetail(spot.id);
     } else if (tries > 0) {
       setTimeout(() => waitForSpot(tries - 1), 500);
     }
@@ -1097,6 +1151,305 @@ setInterval(checkUpdates, 60000);
 setInterval(checkReviewResults, 60000);
 setupReviewReminder();
 checkReviewResults();
+
+/* ==================================================================
+ * 大众点评：评分与评论（匿名 / 实名）
+ * - 匿名点评：显示「匿名用户」+ 模糊头像，不返回任何作者信息，无法进入用户主页
+ * - 实名点评：显示用户昵称 + 头像，点击头像可进入该用户公开主页
+ * ================================================================== */
+const AVATAR_COLORS = ["#5995a8", "#eb765e", "#b4778e", "#68a678", "#6f7fc0", "#d39a47"];
+function avatarColor(seed) {
+  const text = String(seed ?? "");
+  let sum = 0;
+  for (const ch of text) sum += ch.charCodeAt(0);
+  return AVATAR_COLORS[sum % AVATAR_COLORS.length];
+}
+// 头像：有自定义头像用图片；没有则用昵称首字 + 按用户生成的底色
+function avatarSpan(user, options = {}) {
+  const size = options.small ? " small" : "";
+  const seed = options.seed ?? (user ? (user.id ?? user.nickname ?? user.username ?? "") : "");
+  const name = user ? (user.nickname || user.username || "用") : "?";
+  const inner = user && user.avatar_url
+    ? `<img src="${escapeHTML(user.avatar_url)}" alt="${escapeHTML(name)}的头像">`
+    : escapeHTML(String(name).trim().charAt(0).toUpperCase() || "?");
+  return `<span class="avatar${size}" style="--avatar-color:${avatarColor(seed)}">${inner}</span>`;
+}
+// 匿名头像：人形剪影 + 模糊滤镜，配合「匿名用户」名称展示
+function anonymousAvatarSpan(small = false) {
+  return `<span class="avatar anonymous${small ? " small" : ""}" aria-hidden="true"></span>`;
+}
+function starsHTML(rating) {
+  const value = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)));
+  return Array.from({ length: 5 }, (_, index) => `<span class="${index < value ? "on" : ""}">★</span>`).join("");
+}
+function ratingLineHTML(spot) {
+  if (!spot || !spot.review_count) return "";
+  return `<div class="card-rating"><span class="stars">${starsHTML(spot.avg_rating)}</span>${Number(spot.avg_rating).toFixed(1)}<small>${spot.review_count} 条点评</small></div>`;
+}
+function formatReviewTime(value) { return escapeHTML(String(value || "").slice(0, 16)); }
+
+/* ---------------- 地点详情 + 评论区 ---------------- */
+const detailBackdrop = document.querySelector("#detailBackdrop");
+let detailSpotId = null;
+let reviewStarValue = 5;
+
+function setReviewStars(value) {
+  reviewStarValue = value;
+  document.querySelectorAll("#starInput button").forEach((button, index) => button.classList.toggle("on", index < value));
+}
+
+function renderStarInput() {
+  const holder = document.querySelector("#starInput");
+  holder.innerHTML = Array.from({ length: 5 }, (_, index) => `<button type="button" data-star="${index + 1}" class="${index < reviewStarValue ? "on" : ""}" aria-label="${index + 1} 星">★</button>`).join("");
+  holder.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => setReviewStars(Number(button.dataset.star))));
+}
+
+function findSpotAnywhere(spotId) {
+  return state.spots.find((item) => String(item.id) === String(spotId))
+    || state.mapSpots.find((item) => String(item.id) === String(spotId));
+}
+
+function openSpotDetail(spotId) {
+  const spot = findSpotAnywhere(spotId);
+  if (!spot) { showToast("未找到该地点"); return; }
+  detailSpotId = spot.id;
+  const item = categories[spot.category] || categories.all;
+  const image = document.querySelector("#detailImage");
+  if (spot.image_url) { image.src = spot.image_url; image.hidden = false; image.alt = spot.name; } else { image.hidden = true; image.removeAttribute("src"); }
+  document.querySelector("#detailTitle").textContent = spot.name;
+  const tag = document.querySelector("#detailCategory");
+  tag.textContent = item.label;
+  tag.style.setProperty("--chip-color", item.color);
+  const navigate = document.querySelector("#detailNavigate");
+  navigate.href = navigationURL(spot);
+  navigate.textContent = `⌖ ${spot.address || "地图上的目的地"} · 导航`;
+  document.querySelector("#detailDescription").textContent = spot.description || "";
+  document.querySelector("#ratingSummary").innerHTML = '<span class="field-note">评分加载中…</span>';
+  document.querySelector("#reviewList").innerHTML = '<span class="field-note">点评加载中…</span>';
+  document.querySelector("#reviewMessage").textContent = "";
+  // 表单可见性：未登录提示登录；登录则展示（提交逻辑里会预填我的点评）
+  document.querySelector("#reviewForm").hidden = !state.currentUser;
+  document.querySelector("#reviewLoginHint").hidden = Boolean(state.currentUser);
+  detailBackdrop.hidden = false;
+  renderStarInput();
+  setReviewStars(5);
+  document.querySelector("#reviewContent").value = "";
+  document.querySelector("#reviewAnonymous").checked = false;
+  document.querySelector("#reviewSubmitButton").innerHTML = '发表点评 <span>→</span>';
+  document.querySelector("#reviewFormLabel").textContent = "我的点评（一人一店一条，再次提交为修改）";
+  loadSpotReviews(spot.id);
+}
+
+async function loadSpotReviews(spotId) {
+  try {
+    const response = await apiFetch(`${API_BASE}/spots/${spotId}/reviews`, { headers: authHeaders() });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "点评加载失败");
+    const reviews = Array.isArray(payload.data) ? payload.data : [];
+    const stats = payload.stats || {};
+    renderRatingSummary(stats);
+    renderReviewList(reviews);
+    prefillMyReview(reviews);
+    syncSpotRating(spotId, stats);
+  } catch (error) {
+    document.querySelector("#ratingSummary").innerHTML = `<span class="field-note">${escapeHTML(error.message || "评分加载失败")}</span>`;
+    document.querySelector("#reviewList").innerHTML = '<span class="field-note">点评加载失败，请稍后重试</span>';
+  }
+}
+
+function renderRatingSummary(stats) {
+  const holder = document.querySelector("#ratingSummary");
+  if (!stats || !stats.count) { holder.innerHTML = '<span class="field-note">还没有评分，来做第一个点评的人吧</span>'; return; }
+  holder.innerHTML = `<span class="rating-value">${Number(stats.average).toFixed(1)}</span><span class="rating-sub"><span class="stars">${starsHTML(stats.average)}</span><span>${stats.count} 条点评</span></span>`;
+}
+
+function renderReviewList(reviews) {
+  const holder = document.querySelector("#reviewList");
+  if (!reviews.length) { holder.innerHTML = '<div class="empty-state">还没有点评，点上方评分抢个沙发吧。</div>'; return; }
+  holder.innerHTML = reviews.map((review) => {
+    // 匿名点评：user 为空（后端不返回任何作者字段），展示匿名用户 + 模糊头像
+    const head = review.anonymous || !review.user
+      ? `<div class="review-anon-name">${anonymousAvatarSpan()}匿名用户<span class="review-badge">匿名</span></div>`
+      : `<button class="review-user" data-user-id="${review.user.id}" type="button" title="查看 TA 的主页">${avatarSpan(review.user)}<strong class="review-name">${escapeHTML(review.user.nickname || review.user.username || "社区成员")}</strong></button>`;
+    return `<article class="review-item${review.anonymous ? " anonymous" : ""}">${head}<div class="review-body"><span class="stars">${starsHTML(review.rating)}</span><p>${escapeHTML(review.content)}</p><span class="review-foot"><small>${formatReviewTime(review.created_at)}</small>${review.mine ? `<button class="review-delete" data-review-delete-id="${review.id}" type="button">删除我的点评</button>` : ""}</span></div></article>`;
+  }).join("");
+}
+
+// 已有我的点评：预填评分/内容/匿名状态，按钮变为「保存修改」
+function prefillMyReview(reviews) {
+  const mine = reviews.find((review) => review.mine);
+  if (!mine || !state.currentUser) return;
+  setReviewStars(mine.rating);
+  document.querySelector("#reviewContent").value = mine.content;
+  document.querySelector("#reviewAnonymous").checked = Boolean(mine.anonymous);
+  document.querySelector("#reviewSubmitButton").innerHTML = '保存修改 <span>→</span>';
+  document.querySelector("#reviewFormLabel").textContent = "我的点评（再次提交会覆盖原内容）";
+}
+
+// 评分变化同步到列表卡片与地图弹窗的展示
+function syncSpotRating(spotId, stats) {
+  const patch = (list) => {
+    const target = list.find((item) => String(item.id) === String(spotId));
+    if (target) { target.avg_rating = stats.average; target.review_count = stats.count; }
+  };
+  patch(state.spots);
+  patch(state.mapSpots);
+  renderList();
+  renderMarkers();
+}
+
+document.querySelector("#reviewForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!state.currentUser) { openAuth(); return; }
+  const message = document.querySelector("#reviewMessage");
+  const content = document.querySelector("#reviewContent").value.trim();
+  if (content.length < 2) { message.textContent = "点评内容至少 2 个字"; return; }
+  const button = document.querySelector("#reviewSubmitButton");
+  button.disabled = true;
+  message.textContent = "提交中……";
+  try {
+    const response = await apiFetch(`${API_BASE}/spots/${detailSpotId}/reviews`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ rating: reviewStarValue, content, anonymous: document.querySelector("#reviewAnonymous").checked })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "点评失败");
+    message.textContent = "";
+    showToast(payload.updated ? "点评已更新" : "点评已发表");
+    await loadSpotReviews(detailSpotId);
+  } catch (error) {
+    message.textContent = error.message;
+  }
+  button.disabled = false;
+});
+
+async function deleteMyReview(reviewId) {
+  if (!window.confirm("确定删除这条点评吗？")) return;
+  try {
+    const response = await apiFetch(`${API_BASE}/reviews/${reviewId}`, { method: "DELETE", headers: authHeaders() });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "删除失败");
+    showToast("点评已删除");
+    if (detailSpotId) await loadSpotReviews(detailSpotId);
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+document.querySelector("#reviewLoginButton").addEventListener("click", openAuth);
+document.querySelector("#closeDetailButton").addEventListener("click", () => { detailBackdrop.hidden = true; });
+detailBackdrop.addEventListener("click", (event) => { if (event.target === detailBackdrop) detailBackdrop.hidden = true; });
+
+/* ---------------- 用户公开主页（点击实名点评头像进入） ---------------- */
+const profileBackdrop = document.querySelector("#profileBackdrop");
+
+async function openUserProfile(userId) {
+  document.querySelector("#profileTitle").textContent = "加载中…";
+  document.querySelector("#profileJoined").textContent = "";
+  document.querySelector("#profileStats").innerHTML = "";
+  document.querySelector("#profileReviews").innerHTML = '<span class="field-note">加载中…</span>';
+  profileBackdrop.hidden = false;
+  try {
+    const response = await apiFetch(`${API_BASE}/users/${userId}/profile`);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "加载失败");
+    const user = payload.user;
+    document.querySelector("#profileTitle").textContent = user.nickname || `用户 #${user.id}`;
+    const avatarHolder = document.querySelector("#profileAvatar");
+    avatarHolder.style.setProperty("--avatar-color", avatarColor(user.id));
+    avatarHolder.innerHTML = user.avatar_url
+      ? `<img src="${escapeHTML(user.avatar_url)}" alt="${escapeHTML(user.nickname)}的头像">`
+      : escapeHTML(String(user.nickname || user.username || "?").charAt(0).toUpperCase());
+    document.querySelector("#profileJoined").textContent = `加入于 ${String(user.created_at || "").slice(0, 10)}`;
+    document.querySelector("#profileStats").innerHTML = `<div><strong>${payload.stats.public_reviews}</strong><span>公开点评</span></div><div><strong>${payload.stats.spots}</strong><span>提交地点</span></div>`;
+    const reviews = Array.isArray(payload.reviews) ? payload.reviews : [];
+    document.querySelector("#profileReviews").innerHTML = reviews.length
+      ? reviews.map((review) => `<article class="review-item"><div class="review-anon-name">${avatarSpan(user)}<span class="profile-review-spot">${escapeHTML(review.spot_name)}</span></div><div class="review-body"><span class="stars">${starsHTML(review.rating)}</span><p>${escapeHTML(review.content)}</p><small>${formatReviewTime(review.created_at)}</small></div></article>`).join("")
+      : '<div class="empty-state">TA 还没有公开点评（匿名点评不会出现在主页）。</div>';
+  } catch (error) {
+    document.querySelector("#profileTitle").textContent = "加载失败";
+    document.querySelector("#profileReviews").innerHTML = `<span class="field-note">${escapeHTML(error.message)}</span>`;
+  }
+}
+
+document.querySelector("#closeProfileButton").addEventListener("click", () => { profileBackdrop.hidden = true; });
+profileBackdrop.addEventListener("click", (event) => { if (event.target === profileBackdrop) profileBackdrop.hidden = true; });
+
+/* ---------------- 我的资料：昵称与头像（实名点评中展示） ---------------- */
+const settingsBackdrop = document.querySelector("#settingsBackdrop");
+let pendingAvatarFile = null;
+
+function renderSettingsPreview(name, avatarUrl, seed) {
+  const holder = document.querySelector("#settingsPreviewAvatar");
+  holder.style.setProperty("--avatar-color", avatarColor(seed ?? name));
+  holder.innerHTML = avatarUrl ? `<img src="${escapeHTML(avatarUrl)}" alt="头像预览">` : escapeHTML(String(name || "?").charAt(0).toUpperCase());
+  document.querySelector("#settingsPreviewName").textContent = name || "未设置昵称";
+}
+
+function openSettings() {
+  if (!state.currentUser) return;
+  document.querySelector("#settingsNickname").value = state.currentUser.nickname || "";
+  document.querySelector("#settingsAvatar").value = "";
+  pendingAvatarFile = null;
+  document.querySelector("#settingsAvatarNote").textContent = "选择新图片后会先上传再保存。";
+  document.querySelector("#settingsMessage").textContent = "";
+  renderSettingsPreview(state.currentUser.nickname || state.currentUser.username, state.currentUser.avatar_url, state.currentUser.id);
+  settingsBackdrop.hidden = false;
+}
+
+document.querySelector("#settingsButton").addEventListener("click", openSettings);
+document.querySelector("#closeSettingsButton").addEventListener("click", () => { settingsBackdrop.hidden = true; });
+settingsBackdrop.addEventListener("click", (event) => { if (event.target === settingsBackdrop) settingsBackdrop.hidden = true; });
+document.querySelector("#settingsAvatar").addEventListener("change", () => {
+  const file = document.querySelector("#settingsAvatar").files[0];
+  pendingAvatarFile = file || null;
+  document.querySelector("#settingsAvatarNote").textContent = file ? `已选择：${file.name}（${Math.round(file.size / 1024)} KB）` : "选择新图片后会先上传再保存。";
+});
+
+document.querySelector("#settingsForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!state.currentUser) return;
+  const message = document.querySelector("#settingsMessage");
+  const nickname = document.querySelector("#settingsNickname").value.trim();
+  if (nickname && (nickname.length < 2 || nickname.length > 24)) { message.textContent = "昵称需为 2-24 个字符"; return; }
+  const button = document.querySelector("#settingsSubmitButton");
+  button.disabled = true;
+  message.textContent = "保存中……";
+  try {
+    let avatarUrl = state.currentUser.avatar_url || "";
+    if (pendingAvatarFile) {
+      if (pendingAvatarFile.size > 2 * 1024 * 1024) throw new Error("头像不能超过 2MB");
+      const upload = await apiFetch(`${API_BASE}/uploads`, { method: "POST", headers: authHeaders({ "Content-Type": pendingAvatarFile.type }), body: pendingAvatarFile });
+      const uploadPayload = await upload.json().catch(() => ({}));
+      if (!upload.ok) throw new Error(uploadPayload.error || "头像上传失败");
+      avatarUrl = uploadPayload.url;
+    }
+    renderSettingsPreview(nickname || state.currentUser.username, avatarUrl, state.currentUser.id);
+    const response = await apiFetch(`${API_BASE}/auth/profile`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ nickname, avatar_url: avatarUrl })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "保存失败");
+    state.currentUser = { ...state.currentUser, ...payload.user };
+    updateAuthUI();
+    message.textContent = "资料已保存";
+    showToast("资料已保存，实名点评将展示新形象");
+  } catch (error) {
+    message.textContent = error.message;
+  }
+  button.disabled = false;
+});
+
+// Esc 关闭点评相关弹窗
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  detailBackdrop.hidden = true;
+  profileBackdrop.hidden = true;
+  settingsBackdrop.hidden = true;
+});
 
 // 本地验证开关：访问 index.html?demoRoute=1 时自动在向导区文字下方画一条演示路线，
 // 不依赖后端接口，用于确认小地图渲染正常

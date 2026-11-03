@@ -39,6 +39,8 @@ const RESET_REQUEST_LIMIT_PER_HOUR = 3;
 const SPOT_SUBMIT_LIMIT_PER_HOUR = 10;
 // 高德日配额是全体用户共享的，单账号耗尽会导致检索与自动核验同时失效
 const AMAP_PROXY_LIMIT_PER_HOUR = 60;
+// 大众点评写入（发表或修改）限流：防刷屏
+const REVIEW_WRITE_LIMIT_PER_HOUR = 20;
 
 async function dispatch(request, env) {
   const url = new URL(request.url);
@@ -80,6 +82,16 @@ async function dispatch(request, env) {
     if (photoMatch && request.method === "POST") return addSpotPhoto(request, env, Number(photoMatch[1]));
     const photoDeleteMatch = url.pathname.match(/^\/api\/photos\/(\d+)$/);
     if (photoDeleteMatch && request.method === "DELETE") return deleteSpotPhoto(request, env, Number(photoDeleteMatch[1]));
+    // 大众点评：地点评分与评论，支持匿名（匿名点评不暴露任何作者身份）
+    const reviewMatch = url.pathname.match(/^\/api\/spots\/(\d+)\/reviews$/);
+    if (reviewMatch && request.method === "GET") return listSpotReviews(request, env, Number(reviewMatch[1]));
+    if (reviewMatch && request.method === "POST") return upsertSpotReview(request, env, Number(reviewMatch[1]));
+    const reviewDeleteMatch = url.pathname.match(/^\/api\/reviews\/(\d+)$/);
+    if (reviewDeleteMatch && request.method === "DELETE") return deleteReview(request, env, Number(reviewDeleteMatch[1]));
+    // 用户公开主页（只含非匿名内容）与个人资料设置（昵称/头像）
+    const profileMatch = url.pathname.match(/^\/api\/users\/(\d+)\/profile$/);
+    if (profileMatch && request.method === "GET") return publicProfile(request, env, Number(profileMatch[1]));
+    if (url.pathname === "/api/auth/profile" && request.method === "POST") return updateProfile(request, env);
     if (url.pathname === "/api/admin/spots" && request.method === "GET") return listPending(request, env);
     if (url.pathname === "/api/admin/reports" && request.method === "GET") return listReports(request, env);
     const reportStatusMatch = url.pathname.match(/^\/api\/admin\/reports\/(\d+)\/status$/);
@@ -125,8 +137,15 @@ async function listSpots(request, url, env) {
   if (since) { conditions.push("COALESCE(updated_at, created_at) > ?"); bindings.push(since); }
   const where = conditions.join(" AND ");
   const count = await env.DB.prepare(`SELECT COUNT(*) AS total FROM spots WHERE ${where}`).bind(...bindings).first();
-  const columns = fields === "map" ? "id, name, category, lat, lng" : "id, name, address, category, description, lat, lng, image_url, likes, created_at";
-  const rows = await env.DB.prepare(`SELECT ${columns} FROM spots WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...bindings, limit, (page - 1) * limit).all();
+  const columns = fields === "map" ? "id, name, category, lat, lng, address, description, image_url" : "id, name, address, category, description, lat, lng, image_url, likes, created_at";
+  // 列表附带评分聚合（点评均分与条数）；reviews 表不存在（未跑迁移）时自动降级为无评分字段
+  const ratingColumns = ", (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.spot_id = spots.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.spot_id = spots.id) AS review_count";
+  let rows;
+  try {
+    rows = await env.DB.prepare(`SELECT ${columns}${ratingColumns} FROM spots WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...bindings, limit, (page - 1) * limit).all();
+  } catch {
+    rows = await env.DB.prepare(`SELECT ${columns} FROM spots WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...bindings, limit, (page - 1) * limit).all();
+  }
   // 登录用户附带自己的点赞状态，使网页与 App 的点赞跨端一致
   let data = rows.results;
   if (fields !== "map") {
@@ -478,7 +497,7 @@ async function handleCorrection(request, env, id) {
 async function currentUser(request, env) {
   const user = await authenticatedUser(request, env);
   if (!user) return json({ user: null }, 200, env);
-  const payload = { user: { id: user.id, username: user.username } };
+  const payload = { user: { id: user.id, username: user.username, nickname: user.nickname || null, avatar_url: user.avatar_url || null } };
   if (user.must_change_password) payload.mustChangePassword = true;
   return json(payload, 200, env);
 }
@@ -492,7 +511,9 @@ async function logout(request, env) {
 async function createSession(env, userId, username, mustChangePassword) {
   const token = crypto.randomUUID();
   await env.DB.prepare("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, datetime('now', '+30 days'))").bind(token, userId).run();
-  const payload = { token, user: { id: userId, username } };
+  // 登录返回昵称与头像，前端直接可用（昵称未设置时为 null，前端回退显示用户名）
+  const profile = await env.DB.prepare("SELECT nickname, avatar_url FROM users WHERE id = ?").bind(userId).first().catch(() => null);
+  const payload = { token, user: { id: userId, username, nickname: profile?.nickname || null, avatar_url: profile?.avatar_url || null } };
   if (mustChangePassword) payload.mustChangePassword = true;
   return json(payload, 201, env);
 }
@@ -500,7 +521,13 @@ async function createSession(env, userId, username, mustChangePassword) {
 async function authenticatedUser(request, env) {
   const token = bearerToken(request);
   if (!token) return null;
-  const user = await env.DB.prepare("SELECT users.id, users.username, users.must_change_password FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token = ? AND sessions.expires_at > CURRENT_TIMESTAMP").bind(token).first();
+  // nickname / avatar_url 由 migration-reviews.sql 引入；旧库未迁移时退回原查询，登录态不受影响
+  let user;
+  try {
+    user = await env.DB.prepare("SELECT users.id, users.username, users.nickname, users.avatar_url, users.must_change_password FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token = ? AND sessions.expires_at > CURRENT_TIMESTAMP").bind(token).first();
+  } catch {
+    user = await env.DB.prepare("SELECT users.id, users.username, users.must_change_password FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token = ? AND sessions.expires_at > CURRENT_TIMESTAMP").bind(token).first();
+  }
   if (!user) return null;
   // 临时密码未修改：仅放行浏览（GET）与改密/登出/身份查询，其余操作一律要求先改密
   if (user.must_change_password) {
@@ -616,6 +643,111 @@ async function deleteSpotPhoto(request, env, id) {
   if (photo.user_id !== user.id) return json({ error: "只能删除自己上传的照片" }, 403, env);
   await env.DB.prepare("DELETE FROM spot_photos WHERE id = ?").bind(id).run();
   return json({ id, deleted: true }, 200, env);
+}
+
+// 评论对外字段：匿名评论绝不带出 user_id / 昵称 / 头像，任何接口都无法据此反查作者账号；
+// mine 只对评论作者本人（携带其登录态的请求）返回 true，用于标记"我的点评"
+function reviewPublicFields(row, viewerId) {
+  const mine = viewerId != null && row.user_id === viewerId;
+  if (row.anonymous) {
+    return { id: row.id, rating: row.rating, content: row.content, anonymous: true, created_at: row.created_at, user: null, mine };
+  }
+  return {
+    id: row.id,
+    rating: row.rating,
+    content: row.content,
+    anonymous: false,
+    created_at: row.created_at,
+    user: { id: row.user_id, nickname: row.nickname || row.username, avatar_url: row.avatar_url || null },
+    mine
+  };
+}
+
+// GET /api/spots/:id/reviews：评论列表 + 评分统计（平均分、条数）
+async function listSpotReviews(request, env, spotId) {
+  const viewer = await authenticatedUser(request, env);
+  const rows = await env.DB.prepare(
+    "SELECT reviews.id, reviews.spot_id, reviews.user_id, reviews.rating, reviews.content, reviews.anonymous, reviews.created_at, users.username, users.nickname, users.avatar_url FROM reviews LEFT JOIN users ON users.id = reviews.user_id WHERE reviews.spot_id = ? ORDER BY reviews.created_at DESC LIMIT 100"
+  ).bind(spotId).all().catch(() => ({ results: [] }));
+  const stats = await env.DB.prepare("SELECT ROUND(AVG(rating), 1) AS average, COUNT(*) AS count FROM reviews WHERE spot_id = ?").bind(spotId).first().catch(() => null);
+  const viewerId = viewer ? viewer.id : null;
+  return json({
+    data: (rows.results || []).map((row) => reviewPublicFields(row, viewerId)),
+    stats: { average: stats && stats.average != null ? Number(stats.average) : null, count: stats ? Number(stats.count || 0) : 0 }
+  }, 200, env);
+}
+
+// POST /api/spots/:id/reviews：发表或修改点评（一人一店一条，再次提交视为修改，可切换匿名状态）
+async function upsertSpotReview(request, env, spotId) {
+  const user = await authenticatedUser(request, env);
+  if (!user) return json({ error: "请先登录后再点评" }, 401, env);
+  const rate = await consumeRateLimit(env, "review-write", rateIdentity(request, user), REVIEW_WRITE_LIMIT_PER_HOUR);
+  if (!rate.allowed) return json({ error: `点评过于频繁，每小时最多 ${REVIEW_WRITE_LIMIT_PER_HOUR} 条，请稍后再试` }, 429, env);
+  const body = await request.json().catch(() => ({}));
+  const rating = Math.round(Number(body.rating));
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return json({ error: "评分需为 1-5 星" }, 400, env);
+  const content = String(body.content || "").trim().slice(0, 500);
+  if (content.length < 2) return json({ error: "点评内容至少 2 个字" }, 400, env);
+  const anonymous = body.anonymous === true || body.anonymous === 1;
+  const spot = await env.DB.prepare("SELECT id FROM spots WHERE id = ? AND status = 'approved'").bind(spotId).first();
+  if (!spot) return json({ error: "地点不存在" }, 404, env);
+  await env.DB.prepare(
+    "INSERT INTO reviews (spot_id, user_id, rating, content, anonymous) VALUES (?, ?, ?, ?, ?) ON CONFLICT(spot_id, user_id) DO UPDATE SET rating = excluded.rating, content = excluded.content, anonymous = excluded.anonymous, updated_at = CURRENT_TIMESTAMP"
+  ).bind(spotId, user.id, rating, content, anonymous ? 1 : 0).run();
+  const saved = await env.DB.prepare("SELECT id, rating, content, anonymous, created_at, updated_at FROM reviews WHERE spot_id = ? AND user_id = ?").bind(spotId, user.id).first();
+  return json({
+    data: reviewPublicFields({ ...saved, user_id: user.id, username: user.username, nickname: user.nickname, avatar_url: user.avatar_url }, user.id),
+    updated: Boolean(saved.updated_at)
+  }, 201, env);
+}
+
+// DELETE /api/reviews/:id：删除自己的点评（匿名点评同样只能由作者本人删除）
+async function deleteReview(request, env, id) {
+  const user = await authenticatedUser(request, env);
+  if (!user) return json({ error: "请先登录" }, 401, env);
+  const result = await env.DB.prepare("DELETE FROM reviews WHERE id = ? AND user_id = ?").bind(id, user.id).run();
+  if (!result.meta.changes) return json({ error: "只能删除自己的点评" }, 403, env);
+  return json({ id, deleted: true }, 200, env);
+}
+
+// GET /api/users/:id/profile：用户公开主页。
+// 只聚合非匿名内容——匿名点评不属于任何可检索的用户维度，这里永远查不到
+async function publicProfile(request, env, userId) {
+  const user = await env.DB.prepare("SELECT id, username, nickname, avatar_url, created_at FROM users WHERE id = ?").bind(userId).first().catch(() => null);
+  if (!user) return json({ error: "用户不存在" }, 404, env);
+  const spotCount = await env.DB.prepare("SELECT COUNT(*) AS total FROM spots WHERE user_id = ? AND status = 'approved'").bind(userId).first().catch(() => ({ total: 0 }));
+  const reviewCount = await env.DB.prepare("SELECT COUNT(*) AS total FROM reviews WHERE user_id = ? AND anonymous = 0").bind(userId).first().catch(() => ({ total: 0 }));
+  const reviewRows = await env.DB.prepare(
+    "SELECT reviews.id, reviews.spot_id, reviews.rating, reviews.content, reviews.created_at, spots.name AS spot_name FROM reviews JOIN spots ON spots.id = reviews.spot_id WHERE reviews.user_id = ? AND reviews.anonymous = 0 AND spots.status = 'approved' ORDER BY reviews.created_at DESC LIMIT 10"
+  ).bind(userId).all().catch(() => ({ results: [] }));
+  return json({
+    user: { id: user.id, nickname: user.nickname || user.username, avatar_url: user.avatar_url || null, created_at: user.created_at },
+    stats: { public_reviews: Number(reviewCount.total || 0), spots: Number(spotCount.total || 0) },
+    reviews: reviewRows.results || []
+  }, 200, env);
+}
+
+// POST /api/auth/profile：设置昵称与头像（头像先经 /api/uploads 上传，取回 /api/images/ 地址）
+async function updateProfile(request, env) {
+  const user = await authenticatedUser(request, env);
+  if (!user) return json({ error: "请先登录" }, 401, env);
+  const body = await request.json().catch(() => ({}));
+  const updates = {};
+  if (body.nickname !== undefined) {
+    const nickname = String(body.nickname || "").trim();
+    if (nickname && (nickname.length < 2 || nickname.length > 24)) return json({ error: "昵称需为 2-24 个字符" }, 400, env);
+    updates.nickname = nickname || null;
+  }
+  if (body.avatar_url !== undefined) {
+    const url = String(body.avatar_url || "").trim();
+    if (url && !/^\/api\/images\/|^https?:\/\//.test(url)) return json({ error: "头像地址无效" }, 400, env);
+    updates.avatar_url = url || null;
+  }
+  const keys = Object.keys(updates);
+  if (!keys.length) return json({ error: "没有需要更新的内容" }, 400, env);
+  await env.DB.prepare(`UPDATE users SET ${keys.map((key) => `${key} = ?`).join(", ")} WHERE id = ?`).bind(...keys.map((key) => updates[key]), user.id).run();
+  const fresh = await env.DB.prepare("SELECT id, username, nickname, avatar_url FROM users WHERE id = ?").bind(user.id).first();
+  return json({ user: { id: fresh.id, username: fresh.username, nickname: fresh.nickname || null, avatar_url: fresh.avatar_url || null } }, 200, env);
 }
 
 async function fetchWithTimeout(url, timeoutMs, options) {
@@ -1009,6 +1141,8 @@ async function adminDeleteSpot(request, env, id) {
   if (!authorized(request, env)) return json({ error: "未授权" }, 401, env);
   const spot = await env.DB.prepare("SELECT id, name FROM spots WHERE id = ?").bind(id).first();
   if (!spot) return json({ error: "地点不存在" }, 404, env);
+  // 点评表可能尚未迁移（migration-reviews.sql 未执行），单独删除并容错，不阻塞主清理
+  await env.DB.prepare("DELETE FROM reviews WHERE spot_id = ?").bind(id).run().catch(() => null);
   await env.DB.batch([
     env.DB.prepare("DELETE FROM spot_likes WHERE spot_id = ?").bind(id),
     env.DB.prepare("DELETE FROM spot_reports WHERE spot_id = ?").bind(id),

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261027-12">
+  <link rel="stylesheet" href="style.css?v=20261102-13">
 </head>
 <body>
   <main class="app-shell">
@@ -19,7 +19,7 @@
         <span><strong>清远</strong><small>社区共享地图</small></span>
       </a>
       <div class="topbar-meta"><span class="status-dot"></span>正在收集本地好去处</div>
-      <div class="topbar-actions"><button class="auth-button" id="authButton" type="button">登录 / 注册</button><button class="share-button" id="shareButton" type="button"><span aria-hidden="true">↗</span> 分享地图</button></div>
+      <div class="topbar-actions"><button class="text-button" id="settingsButton" type="button" hidden>⚙ 我的资料</button><button class="auth-button" id="authButton" type="button">登录 / 注册</button><button class="share-button" id="shareButton" type="button"><span aria-hidden="true">↗</span> 分享地图</button></div>
     </header>
 
     <section class="intro-panel">
@@ -104,6 +104,61 @@
       <p class="form-message" id="formMessage" role="status"></p>
     </section>
   </div>
+  <div class="modal-backdrop" id="detailBackdrop" hidden>
+    <section class="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+      <button class="close-button" id="closeDetailButton" type="button" aria-label="关闭">×</button>
+      <img id="detailImage" class="detail-image" alt="" hidden>
+      <p class="eyebrow">REVIEWS / 大众点评</p>
+      <h2 id="detailTitle"></h2>
+      <p class="detail-meta"><span id="detailCategory" class="category-tag"></span></p>
+      <a id="detailNavigate" class="spot-address navigate-link" target="_blank" rel="noopener"></a>
+      <p id="detailDescription" class="detail-description"></p>
+      <div class="rating-summary" id="ratingSummary"><span class="field-note">评分加载中…</span></div>
+      <h3 class="review-section-title">全部点评</h3>
+      <div id="reviewList" class="review-list"><span class="field-note">点评加载中…</span></div>
+      <form id="reviewForm" class="review-form">
+        <label id="reviewFormLabel">我的点评（一人一店一条，再次提交为修改）</label>
+        <div class="star-input" id="starInput" aria-label="选择评分"></div>
+        <textarea id="reviewContent" rows="3" maxlength="500" placeholder="说说这家店的味道、环境、服务……"></textarea>
+        <label class="anon-toggle"><input type="checkbox" id="reviewAnonymous"> 匿名点评（显示为「匿名用户」和模糊头像，他人无法进入你的主页）</label>
+        <button class="primary-button full-width" type="submit" id="reviewSubmitButton">发表点评 <span>→</span></button>
+        <p class="form-message" id="reviewMessage" role="status"></p>
+      </form>
+      <div id="reviewLoginHint" class="review-login-hint" hidden>
+        <p class="field-note">登录后即可点评；可以选择匿名，匿名点评不会暴露你的账号。</p>
+        <button class="address-search-button" id="reviewLoginButton" type="button">登录 / 注册</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="profileBackdrop" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+      <button class="close-button" id="closeProfileButton" type="button" aria-label="关闭">×</button>
+      <p class="eyebrow">MEMBER / 社区成员</p>
+      <div class="profile-head"><span id="profileAvatar" class="profile-avatar"></span><div><h2 id="profileTitle"></h2><p id="profileJoined" class="profile-joined"></p></div></div>
+      <div class="profile-stats" id="profileStats"></div>
+      <h3 class="review-section-title">TA 的公开点评</h3>
+      <div id="profileReviews" class="review-list"><span class="field-note">加载中…</span></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="settingsBackdrop" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <button class="close-button" id="closeSettingsButton" type="button" aria-label="关闭">×</button>
+      <p class="eyebrow">PROFILE / 我的资料</p>
+      <h2 id="settingsTitle">昵称与头像</h2>
+      <p class="modal-intro">昵称与头像会展示在你发表的实名点评里；匿名点评不显示任何个人信息。</p>
+      <div class="settings-preview"><span id="settingsPreviewAvatar" class="profile-avatar"></span><div><strong id="settingsPreviewName">未设置昵称</strong><small class="field-note">实名点评中的展示效果</small></div></div>
+      <form id="settingsForm">
+        <label>昵称（2-24 字，留空则使用用户名）<input id="settingsNickname" type="text" maxlength="24" placeholder="例如：北江食客"></label>
+        <label>头像（JPG / PNG / WebP，≤2MB）<input type="file" id="settingsAvatar" accept="image/jpeg,image/png,image/webp"></label>
+        <p class="field-note" id="settingsAvatarNote">选择新图片后会先上传再保存。</p>
+        <button class="primary-button full-width" type="submit" id="settingsSubmitButton">保存资料</button>
+        <p class="form-message" id="settingsMessage" role="status"></p>
+      </form>
+    </section>
+  </div>
+
   <div class="toast" id="toast" role="status"></div>
   <div class="correction-bar" id="correctionBar" hidden>
     <span class="correction-hint">拖动蓝色标记到正确位置后提交</span>
@@ -140,6 +195,7 @@
 
   <script>window._AMapSecurityConfig = { securityJsCode: "23bdb3356d33258cc84de4c5ec773e5a" };</script>
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
-  <script src="app.js?v=20261027-33"></script>
+  <script src="demo-data.js?v=20261102-1"></script>
+  <script src="app.js?v=20261102-34"></script>
 </body>
 </html>

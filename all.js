@@ -41,12 +41,34 @@ function renderList() {
   const meta = document.querySelector("#allMeta");
   const spots = currentFilter === "all" ? allSpots : allSpots.filter((spot) => spot.category === currentFilter);
   const filterLabel = FILTERS.find((item) => item.key === currentFilter).label;
-  meta.textContent = `共 ${allSpots.length} 个地点 · ${filterLabel}${spots.length} 个 · 点击卡片回到地图查看位置`;
+  meta.textContent = `共 ${allSpots.length} 个地点 · ${filterLabel}${spots.length} 个 · 点击卡片查看评分与点评`;
   list.innerHTML = spots.map((spot) => {
     const item = CATEGORIES[spot.category] || { label: spot.category, color: "#2F6D5A" };
     const image = spot.image_url ? `<img class="spot-image" src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">` : "";
-    return `<article class="spot-card"><a class="all-card-link" href="index.html?spot=${spot.id}">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div></a><a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${escapeHTML(spot.address || "地图上的目的地")} · 导航</a><p>${escapeHTML(spot.description || "")}</p><div class="card-footer"><small>♡ ${spot.likes ?? 0}</small><small>${escapeHTML((spot.created_at || "").slice(0, 10))}</small></div></article>`;
+    const rating = spot.review_count
+      ? `<div class="card-rating"><span class="stars">${starsHTML(spot.avg_rating)}</span>${Number(spot.avg_rating).toFixed(1)}<small>${spot.review_count} 条点评</small></div>`
+      : '<div class="card-rating"><small>暂无评分</small></div>';
+    return `<article class="spot-card"><a class="all-card-link" href="index.html?spot=${spot.id}&detail=1">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div></a>${rating}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${escapeHTML(spot.address || "地图上的目的地")} · 导航</a><p>${escapeHTML(spot.description || "")}</p><div class="card-footer"><small>♡ ${spot.likes ?? 0}</small><a class="text-button" href="index.html?spot=${spot.id}&detail=1">点评 →</a><small>${escapeHTML((spot.created_at || "").slice(0, 10))}</small></div></article>`;
   }).join("") || '<div class="empty-state">这个分类下还没有地点。</div>';
+}
+
+function starsHTML(rating) {
+  const value = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)));
+  return Array.from({ length: 5 }, (_, index) => `<span class="${index < value ? "on" : ""}">★</span>`).join("");
+}
+
+// 与主页 app.js 相同的兜底：本地纯静态预览（无后端）时使用演示数据
+function canFallbackToDemo() { return Boolean(window.QYDemo) && /^(localhost|127\.0\.0\.1)$/.test(location.hostname); }
+async function apiFetch(path, options = {}) {
+  try {
+    const response = await fetch(path, options);
+    const contentType = response.headers.get("Content-Type") || "";
+    if (response.status === 404 && !contentType.includes("application/json") && canFallbackToDemo()) return window.QYDemo.handle(path, options);
+    return response;
+  } catch (error) {
+    if (canFallbackToDemo()) return window.QYDemo.handle(path, options);
+    throw error;
+  }
 }
 
 async function loadAll() {
@@ -54,7 +76,7 @@ async function loadAll() {
     // 后端 full 模式单页上限 50，循环取页直到取满 total
     allSpots = [];
     for (let page = 1; page <= 20; page++) {
-      const response = await fetch(`${API_BASE}/spots?page=${page}&limit=50`);
+      const response = await apiFetch(`${API_BASE}/spots?page=${page}&limit=50`);
       const payload = await response.json();
       const rows = Array.isArray(payload.data) ? payload.data : [];
       allSpots.push(...rows);
