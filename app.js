@@ -16,12 +16,17 @@ const AUTH_TOKEN_KEY = "qingyuan-auth-token";
 const ACTOR_TOKEN_KEY = "qingyuan-actor-token";
 
 const map = new AMap.Map("map", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D", mapStyle: "amap://styles/normal" });
-// 向导区路线小地图：容器始终参与布局（用 height/opacity 显隐，而非 display:none，
-// 否则高德渲染器会暂停且不自动恢复）。实例在页面加载时创建，与主地图同生命周期，
-// 后续路线编辑功能在此实例上扩展。
+// 向导区路线小地图：容器平时 display:none（height:0 时创建实例会得到 0×0 空白画布且不自动恢复），
+// 因此改为懒创建——等容器真正展开到最终尺寸后再实例化（见 drawRoute 里的 ensureGuideMap）。
 // useNativeMap: 强制用 Canvas2D 渲染——绕开 Windows Chrome 的 WebGPU
 // requestAdapter 二次调用失败（"No available adapters"）导致的空白画布
-const guideMap = new AMap.Map("guideMap", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D", mapStyle: "amap://styles/normal", useNativeMap: true });
+let guideMap = null;
+function ensureGuideMap() {
+  if (!guideMap) {
+    guideMap = new AMap.Map("guideMap", { zoom: 12, center: [113.056, 23.6818], viewMode: "2D", mapStyle: "amap://styles/normal", useNativeMap: true });
+  }
+  return guideMap;
+}
 
 // ---------------- 位置纠偏：拖动标记修正点位位置，提交后转管理员确认 ----------------
 let correctionContext = null;
@@ -486,8 +491,8 @@ function highlightSpots(ids) {
 let routeOverlay = { polyline: null, badges: [] };
 
 function clearRoute() {
-  if (routeOverlay.polyline) { guideMap.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
-  routeOverlay.badges.forEach((badge) => guideMap.remove(badge));
+  if (routeOverlay.polyline && guideMap) { guideMap.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
+  if (guideMap) routeOverlay.badges.forEach((badge) => guideMap.remove(badge));
   routeOverlay.badges = [];
   const container = document.querySelector("#guideMap");
   if (container) container.classList.remove("visible");
@@ -527,15 +532,29 @@ function drawRoute(spots) {
   if (clearButton) clearButton.hidden = false;
   const container = document.querySelector("#guideMap");
   if (container) container.classList.add("visible");
+  // 容器此时已是最终尺寸（display 显隐，无高度动画），可直接创建地图
+  const gm = ensureGuideMap();
   // 路线画在向导区小地图上（主地图只高亮）：虚线连接 + 序号标记
   routeOverlay.polyline = new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true, zIndex: 80 });
-  guideMap.add(routeOverlay.polyline);
+  gm.add(routeOverlay.polyline);
   ordered.forEach((spot, index) => {
     const badge = new AMap.Marker({ position: [spot.lng, spot.lat], content: `<div class="route-badge">${index + 1}</div>`, offset: new AMap.Pixel(-13, -40), zIndex: 110 });
-    guideMap.add(badge);
+    gm.add(badge);
     routeOverlay.badges.push(badge);
   });
-  guideMap.setFitView(null, false, [40, 40, 40, 40]);
+  gm.setFitView(null, false, [40, 40, 40, 40]);
+  // 强制首次绘制：高德在尺寸未变化时会跳过重绘，轻推 1px 再还原可立刻触发绘制
+  const nudgeRepaint = () => {
+    window.dispatchEvent(new Event("resize"));
+    if (!container) return;
+    container.style.height = "301px";
+    requestAnimationFrame(() => {
+      container.style.height = "";
+      gm.resize();
+    });
+  };
+  nudgeRepaint();
+  setTimeout(nudgeRepaint, 400);
 }
 
 document.querySelector("#clearRouteButton").addEventListener("click", () => {
@@ -1078,3 +1097,13 @@ setInterval(checkUpdates, 60000);
 setInterval(checkReviewResults, 60000);
 setupReviewReminder();
 checkReviewResults();
+
+// 本地验证开关：访问 index.html?demoRoute=1 时自动在向导区文字下方画一条演示路线，
+// 不依赖后端接口，用于确认小地图渲染正常
+if (new URLSearchParams(location.search).has("demoRoute")) {
+  drawRoute([
+    { id: "demo-1", name: "飞来湖", lng: 113.02, lat: 23.70 },
+    { id: "demo-2", name: "清远市博物馆", lng: 113.06, lat: 23.68 },
+    { id: "demo-3", name: "笔架山", lng: 113.09, lat: 23.72 }
+  ]);
+}
