@@ -848,6 +848,25 @@ document.querySelector("#recommendForm").addEventListener("submit", async (event
     if (submitButton) { submitButton.disabled = false; submitButton.textContent = originalText; }
   }
 });
+// 季节推荐：按当前月份把应季主题排最前并高亮，点击即填入需求并直接推荐（复用现有 AI 接口，零额外成本）
+const SEASON_THEMES = [
+  { months: [2, 3, 4], label: "春 · 赏花踏青", prompt: "春天想赏花踏青，推荐几个适合出游的地方" },
+  { months: [5, 6, 7], label: "夏 · 亲水避暑", prompt: "夏天想找亲水避暑的地方，推荐几个凉爽的好去处" },
+  { months: [8, 9, 10], label: "秋 · 登高望远", prompt: "秋天想登高望远看秋色，推荐几个适合的地方" },
+  { months: [11, 12, 1], label: "冬 · 暖胃食补", prompt: "冬天想暖胃食补，推荐几家好吃又暖和的店" }
+];
+(function renderSeasonChips() {
+  const holder = document.querySelector("#seasonChips");
+  if (!holder) return;
+  const month = new Date().getMonth() + 1;
+  const ordered = [...SEASON_THEMES].sort((a, b) => (b.months.includes(month) ? 1 : 0) - (a.months.includes(month) ? 1 : 0));
+  holder.innerHTML = ordered.map((theme) => `<button class="season-chip${theme.months.includes(month) ? " current" : ""}" type="button">${theme.label}</button>`).join("");
+  holder.querySelectorAll(".season-chip").forEach((button, index) => button.addEventListener("click", () => {
+    document.querySelector("#recommendInput").value = ordered[index].prompt;
+    document.querySelector("#recommendForm").requestSubmit();
+  }));
+})();
+
 document.querySelector("#mySpotsButton").addEventListener("click", async () => {
   if (state.myOnly) {
     state.myOnly = false; state.query = ""; state.page = 1; document.querySelector("#searchInput").value = ""; document.querySelector("#mySpotsButton").textContent = "我的提交"; await loadPublicSpots(); return;

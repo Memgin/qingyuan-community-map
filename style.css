@@ -133,6 +133,12 @@ button { cursor: pointer; }
   .form-grid { grid-template-columns: 1fr; gap: 0; }
 }
 
+/* 季节推荐：应季主题快捷入口（复用 AI 推荐接口，占整行排成一排） */
+.season-chips { display: flex; flex-wrap: wrap; gap: 8px; flex-basis: 100%; }
+.season-chip { border: 1px solid rgba(25,43,42,.25); background: #fffdf6; padding: 7px 13px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--ink); transition: .15s; }
+.season-chip:hover { border-color: var(--green); color: var(--green); transform: translateY(-1px); }
+.season-chip.current { background: var(--green); border-color: var(--green); color: #fff; }
+
 /* ---------------- 大众点评：评分、评论、头像、用户主页 ---------------- */
 .detail-modal { width: min(100%, 540px); }
 .detail-image { display: block; width: 100%; max-height: 220px; object-fit: cover; margin-bottom: 16px; border: 1px solid var(--line); }

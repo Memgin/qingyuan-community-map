@@ -1214,10 +1214,6 @@ async function recommend(request, env) {
     console.error("AI 推荐未配置：缺少 AI_API_URL 或 AI_API_KEY");
     return json({ error: "AI 推荐尚未配置" }, 503, env);
   }
-  // 频控要放在任何耗时操作之前：否则被拦截的请求也已经把配额消耗掉了
-  const rate = await consumeRateLimit(env, "ai", rateIdentity(request, user), AI_RATE_LIMIT_PER_HOUR);
-  if (!rate.allowed) return json({ error: `AI 推荐每小时最多 ${AI_RATE_LIMIT_PER_HOUR} 次，请稍后再试` }, 429, env);
-
   let body = {};
   try { body = await request.json(); } catch { return json({ error: "请求格式错误" }, 400, env); }
   const prompt = sanitizeForPrompt(body.prompt, 200);
@@ -1227,6 +1223,24 @@ async function recommend(request, env) {
   const centerLat = Number(body.center?.lat);
   const centerLng = Number(body.center?.lng);
   const center = { lat: Number.isFinite(centerLat) ? centerLat : 23.6818, lng: Number.isFinite(centerLng) ? centerLng : 113.056 };
+
+  // AI 推荐缓存：相同需求 + 相近视野（坐标约 1km 精度）24 小时内直接复用结果，
+  // 不调用模型也不计入限流——热门问题零配额消耗。ai_cache 表未迁移时静默跳过
+  const cacheKey = `ai:${prompt}:${center.lat.toFixed(2)}:${center.lng.toFixed(2)}`;
+  let cachedRow = null;
+  try {
+    cachedRow = await env.DB.prepare("SELECT recommendation, spot_ids FROM ai_cache WHERE cache_key = ? AND created_at > datetime('now', '-1 day')").bind(cacheKey).first();
+  } catch { cachedRow = null; }
+  if (cachedRow && cachedRow.recommendation) {
+    let cachedIds = [];
+    try { cachedIds = JSON.parse(cachedRow.spot_ids || "[]"); } catch { cachedIds = []; }
+    return json({ recommendation: cachedRow.recommendation, spotIds: Array.isArray(cachedIds) ? cachedIds : [], cached: true }, 200, env);
+  }
+
+  // 频控放在缓存判定之后：只有真正要调用模型的请求才计数，
+  // 被拦截的请求不会再白耗用户额度；缓存命中完全不占额度
+  const rate = await consumeRateLimit(env, "ai", rateIdentity(request, user), AI_RATE_LIMIT_PER_HOUR);
+  if (!rate.allowed) return json({ error: `AI 推荐每小时最多 ${AI_RATE_LIMIT_PER_HOUR} 次，请稍后再试` }, 429, env);
   // 先用 SQL 按经纬度平方距离粗排取 200 条（0.8 为清远纬度附近的经度修正），
   // 再在内存里用大圆距离精排。避免把整表拉进 Worker 导致开销随数据量线性增长
   const rows = await env.DB.prepare(
@@ -1285,6 +1299,12 @@ async function recommend(request, env) {
   // 只有长度足够的名称才参与匹配：过短的通用词（如「公园」「食堂」）会造成大量误匹配，
   // 让推荐高亮到完全不相关的点位
   const spotIds = candidates.filter((spot) => spot.name.length >= 3 && recommendation.includes(spot.name)).map((spot) => spot.id);
+  // 成功结果写入缓存：24 小时内同需求同视野直接复用（写失败不影响本次返回）
+  try {
+    await env.DB.prepare(
+      "INSERT INTO ai_cache (cache_key, recommendation, spot_ids) VALUES (?, ?, ?) ON CONFLICT(cache_key) DO UPDATE SET recommendation = excluded.recommendation, spot_ids = excluded.spot_ids, created_at = CURRENT_TIMESTAMP"
+    ).bind(cacheKey, recommendation, JSON.stringify(spotIds)).run();
+  } catch { }
   return json({ recommendation, spotIds }, 200, env);
 }
 
