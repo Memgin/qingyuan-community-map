@@ -9,11 +9,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261102-14">
+  <link rel="stylesheet" href="style.css?v=20261102-15">
 </head>
 <body>
   <main class="app-shell">
     <header class="topbar">
+      <liquid-glass class="glass-layer" radius="0" blur="8" saturation="1.2"></liquid-glass>
       <a class="brand" href="./" aria-label="清远社区共享地图首页">
         <span class="brand-mark">QY</span>
         <span><strong>清远</strong><small>社区共享地图</small></span>
@@ -107,7 +108,9 @@
   </div>
   <div class="modal-backdrop" id="detailBackdrop" hidden>
     <section class="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+      <liquid-glass class="glass-layer" backdrop-selector=".app-shell" radius="18" blur="10" saturation="1.15"></liquid-glass>
       <button class="close-button" id="closeDetailButton" type="button" aria-label="关闭">×</button>
+      <div class="detail-inner">
       <img id="detailImage" class="detail-image" alt="" hidden>
       <p class="eyebrow">REVIEWS / 大众点评</p>
       <h2 id="detailTitle"></h2>
@@ -128,6 +131,7 @@
       <div id="reviewLoginHint" class="review-login-hint" hidden>
         <p class="field-note">登录后即可点评；可以选择匿名，匿名点评不会暴露你的账号。</p>
         <button class="address-search-button" id="reviewLoginButton" type="button">登录 / 注册</button>
+      </div>
       </div>
     </section>
   </div>
@@ -197,6 +201,7 @@
   <script>window._AMapSecurityConfig = { securityJsCode: "23bdb3356d33258cc84de4c5ec773e5a" };</script>
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
   <script src="demo-data.js?v=20261102-1"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/simple-liquid-glass@5.6.0/dist/web-component.esm.js"></script>
   <script src="app.js?v=20261102-35"></script>
 </body>
 </html>
