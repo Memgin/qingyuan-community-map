@@ -88,6 +88,8 @@ document.addEventListener("click", (event) => {
   if (userButton) { openUserProfile(userButton.dataset.userId); return; }
   const reviewDeleteButton = event.target.closest("[data-review-delete-id]");
   if (reviewDeleteButton) { deleteMyReview(reviewDeleteButton.dataset.reviewDeleteId); }
+  // 点击菜单外部时收起所有「⋯」菜单
+  if (!event.target.closest(".more-menu-wrap")) document.querySelectorAll(".more-menu-wrap.open").forEach((el) => el.classList.remove("open"));
 });
 
 document.querySelector("#correctionSubmit").addEventListener("click", async () => {
@@ -692,14 +694,17 @@ function renderList() {
     const likes = `${liked ? "♥" : "♡"} ${likeCount}`;
     const image = spot.image_url ? `<img class="spot-image" src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">` : "";
     // 提交者：编辑（分类/主图）；其他登录用户：补图（往照片墙追加）
-    const editButton = spot.isOwner ? `<button class="edit-button" data-edit-id="${spot.id}" type="button">编辑</button>` : (state.currentUser ? `<button class="edit-button" data-edit-id="${spot.id}" type="button">补图</button>` : "");
-    const deleteButton = spot.isOwner ? `<button class="delete-button" data-delete-id="${spot.id}" type="button">删除</button>` : "";
-    const saveButton = state.currentUser && !state.myOnly ? `<button class="save-map-button" data-map-spot-id="${spot.id}" type="button">收藏</button>` : "";
+    const editButton = spot.isOwner ? `<button class="edit-button" data-edit-id="${spot.id}" type="button">编辑分类 / 配图</button>` : (state.currentUser ? `<button class="edit-button" data-edit-id="${spot.id}" type="button">补图</button>` : "");
+    const deleteButton = spot.isOwner ? `<button class="delete-button" data-delete-id="${spot.id}" type="button">删除地点</button>` : "";
+    const saveButton = state.currentUser && !state.myOnly ? `<button class="save-map-button" data-map-spot-id="${spot.id}" type="button">收藏到我的地图</button>` : "";
     const reportButton = !state.myOnly ? `<button class="report-button" data-report-id="${spot.id}" type="button">举报</button>` : "";
-    const statusText = spot.status === "pending" ? "待审核 · 点击查看位置" : "点击查看点评";
+    // 次要操作收进「⋯」菜单：底部只留高频的点赞与热度，避免窄卡片溢出
+    const moreItems = [saveButton, editButton, reportButton, deleteButton].filter(Boolean);
+    const moreMenu = moreItems.length ? `<span class="more-menu-wrap"><button class="more-button" type="button" aria-label="更多操作">⋯</button><span class="more-menu">${moreItems.join("")}</span></span>` : "";
+    const pendingTag = spot.status === "pending" ? `<span class="pending-tag">待审核</span>` : "";
     const hotBadge = Number.isFinite(Number(spot.hot_score)) && Number(spot.hot_score) > 0 ? `<small title="点赞 + 点评×2 + 导航×2">🔥 ${spot.hot_score}</small>` : "";
     const address = escapeHTML(spot.address || "地图上的目的地");
-    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}" data-spot-id="${spot.id}">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div>${ratingLineHTML(spot)}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true" data-nav-id="${spot.id}">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><small>${statusText}</small>${hotBadge}<span class="card-actions">${editButton}${saveButton}${reportButton}${deleteButton}<button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button></span></div></article>`;
+    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}" data-spot-id="${spot.id}">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}${pendingTag}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div>${ratingLineHTML(spot)}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true" data-nav-id="${spot.id}">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button>${hotBadge}<span class="card-actions">${moreMenu}</span></div></article>`;
   };
   spotList.innerHTML = list.length ? list.map(cardHTML).join("") : '<div class="empty-state">没有找到匹配的地点，换个关键词试试。</div>';
   document.querySelector("#pageInfo").textContent = `${state.page} / ${totalPages}`;
@@ -743,6 +748,17 @@ function renderList() {
     if (spot) openEditModal(spot);
   }));
   spotList.querySelectorAll(".save-map-button").forEach((button) => button.addEventListener("click", () => saveSpotToMap(button.dataset.mapSpotId)));
+  // 「⋯」更多操作菜单：点按钮开合，点菜单项或页面其他位置自动收起
+  spotList.querySelectorAll(".more-button").forEach((button) => button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const wrap = button.closest(".more-menu-wrap");
+    spotList.querySelectorAll(".more-menu-wrap.open").forEach((el) => { if (el !== wrap) el.classList.remove("open"); });
+    wrap.classList.toggle("open");
+  }));
+  spotList.querySelectorAll(".more-menu button").forEach((button) => button.addEventListener("click", () => {
+    const wrap = button.closest(".more-menu-wrap");
+    if (wrap) wrap.classList.remove("open");
+  }));
   spotList.querySelectorAll(".spot-card").forEach((card) => card.addEventListener("click", (event) => {
     // 卡片上的按钮（点赞/举报/编辑等）与导航链接不触发详情
     if (event.target.closest("button, a")) return;
