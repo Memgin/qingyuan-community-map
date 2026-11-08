@@ -519,7 +519,7 @@ function markerIcon(category, highlighted = false) {
 }
 
 // 把 AI 推荐到的点位在地图上高亮，并自动缩放到这些点
-function highlightSpots(ids) {
+function highlightSpots(ids, silentToast = false) {
   state.highlightIds = new Set(ids.map(String));
   state.filter = "all";
   state.query = "";
@@ -537,7 +537,7 @@ function highlightSpots(ids) {
     const lats = targets.map((spot) => spot.lat);
     map.setBounds(new AMap.Bounds(new AMap.LngLat(Math.min(...lngs), Math.min(...lats)), new AMap.LngLat(Math.max(...lngs), Math.max(...lats))));
   }
-  showToast(`已在地图高亮 ${targets.length} 个推荐点位`);
+  if (!silentToast) showToast(`已在地图高亮 ${targets.length} 个推荐点位`);
   // 两个及以上点位时在向导区小地图上连成游览路线（主地图只高亮不画线）
   drawRoute(targets.length >= 2 ? targets : []);
 }
@@ -551,6 +551,8 @@ function clearRoute() {
   routeOverlay.badges = [];
   const container = document.querySelector("#guideMap");
   if (container) container.classList.remove("visible");
+  const editorButton = document.querySelector("#routeEditorButton");
+  if (editorButton) editorButton.hidden = true;
   const clearButton = document.querySelector("#clearRouteButton");
   const orderText = document.querySelector("#routeOrder");
   if (clearButton) clearButton.hidden = true;
@@ -587,6 +589,8 @@ function drawRoute(spots) {
   if (clearButton) clearButton.hidden = false;
   const container = document.querySelector("#guideMap");
   if (container) container.classList.add("visible");
+  const editorButton = document.querySelector("#routeEditorButton");
+  if (editorButton) editorButton.hidden = false;
   // 容器此时已是最终尺寸（display 显隐，无高度动画），可直接创建地图
   const gm = ensureGuideMap();
   // 路线画在向导区小地图上（主地图只高亮）：虚线连接 + 序号标记
@@ -614,9 +618,121 @@ function drawRoute(spots) {
 
 document.querySelector("#clearRouteButton").addEventListener("click", () => {
   clearRoute();
+  clearRouteDraft();
   state.highlightIds = new Set();
   refreshList();
 });
+
+/* ---------------- 推荐路线暂存 + 路线编辑器（主地图大画布上调整顺序/增删点位） ---------------- */
+const ROUTE_DRAFT_KEY = "qingyuan-route-draft";
+const routeEditorPanel = document.querySelector("#routeEditorPanel");
+let routeEditor = { spots: [], polyline: null, markers: [] };
+
+function readRouteDraft() { try { return JSON.parse(localStorage.getItem(ROUTE_DRAFT_KEY)) || null; } catch { return null; } }
+function writeRouteDraft(draft) { try { localStorage.setItem(ROUTE_DRAFT_KEY, JSON.stringify(draft)); } catch { /* 存储不可用时忽略 */ } }
+function clearRouteDraft() { localStorage.removeItem(ROUTE_DRAFT_KEY); }
+
+function drawRouteEditorOverlay() {
+  if (routeEditor.polyline) { map.remove(routeEditor.polyline); routeEditor.polyline = null; }
+  routeEditor.markers.forEach((marker) => map.remove(marker));
+  routeEditor.markers = [];
+  if (routeEditor.spots.length < 2) return;
+  routeEditor.polyline = new AMap.Polyline({ path: routeEditor.spots.map((spot) => [spot.lng, spot.lat]), strokeColor: "#E67E22", strokeWeight: 6, strokeOpacity: .9, showDir: true, zIndex: 90 });
+  map.add(routeEditor.polyline);
+  routeEditor.spots.forEach((spot, index) => {
+    const marker = new AMap.Marker({ position: [spot.lng, spot.lat], content: `<div class="route-badge">${index + 1}</div>`, offset: new AMap.Pixel(-13, -40), zIndex: 120 });
+    map.add(marker);
+    routeEditor.markers.push(marker);
+  });
+}
+
+function renderRouteEditor() {
+  const list = document.querySelector("#routeEditorList");
+  list.innerHTML = routeEditor.spots.map((spot, index) => `<div class="private-map-spot"><div class="private-map-spot-info"><strong>${index + 1}. ${escapeHTML(spot.name)}</strong><span>${escapeHTML(spot.address || "")}</span></div><span class="card-actions"><button class="text-button re-up" data-index="${index}" type="button" ${index === 0 ? "disabled" : ""}>↑</button><button class="text-button re-down" data-index="${index}" type="button" ${index === routeEditor.spots.length - 1 ? "disabled" : ""}>↓</button><button class="remove-map-spot re-remove" data-index="${index}" type="button">移除</button></span></div>`).join("");
+  list.querySelectorAll(".re-up").forEach((button) => button.addEventListener("click", () => {
+    const index = Number(button.dataset.index);
+    [routeEditor.spots[index - 1], routeEditor.spots[index]] = [routeEditor.spots[index], routeEditor.spots[index - 1]];
+    renderRouteEditor();
+    drawRouteEditorOverlay();
+  }));
+  list.querySelectorAll(".re-down").forEach((button) => button.addEventListener("click", () => {
+    const index = Number(button.dataset.index);
+    [routeEditor.spots[index + 1], routeEditor.spots[index]] = [routeEditor.spots[index], routeEditor.spots[index + 1]];
+    renderRouteEditor();
+    drawRouteEditorOverlay();
+  }));
+  list.querySelectorAll(".re-remove").forEach((button) => button.addEventListener("click", () => {
+    routeEditor.spots.splice(Number(button.dataset.index), 1);
+    renderRouteEditor();
+    drawRouteEditorOverlay();
+  }));
+  // 可添加的点位：全部图钉数据中不在当前路线的
+  const candidates = state.mapSpots.filter((spot) => !routeEditor.spots.some((item) => String(item.id) === String(spot.id)));
+  const addSelect = document.querySelector("#routeEditorAddSelect");
+  addSelect.innerHTML = candidates.map((spot) => `<option value="${spot.id}">${escapeHTML(spot.name)}</option>`).join("") || '<option value="">没有更多可添加的点位</option>';
+  addSelect.disabled = !candidates.length;
+  document.querySelector("#saveRouteEditorButton").disabled = routeEditor.spots.length < 2;
+}
+
+function closeRouteEditor() {
+  if (routeEditor.polyline) { map.remove(routeEditor.polyline); routeEditor.polyline = null; }
+  routeEditor.markers.forEach((marker) => map.remove(marker));
+  routeEditor.markers = [];
+  routeEditorPanel.hidden = true;
+  if (detailPanel.hidden) introPanel.hidden = false;
+  renderMarkers();
+}
+
+document.querySelector("#routeEditorButton").addEventListener("click", () => {
+  const draft = readRouteDraft();
+  const ids = draft?.spotIds?.length ? draft.spotIds : [...state.highlightIds];
+  const spots = ids.map((id) => findSpotAnywhere(id)).filter(Boolean);
+  if (spots.length < 2) { showToast("请先用 AI 推荐生成一条路线"); return; }
+  routeEditor.spots = spots;
+  introPanel.hidden = true;
+  detailPanel.hidden = true;
+  routeEditorPanel.hidden = false;
+  routeEditorPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  renderRouteEditor();
+  drawRouteEditorOverlay();
+});
+document.querySelector("#closeRouteEditorButton").addEventListener("click", closeRouteEditor);
+document.querySelector("#routeEditorAddButton").addEventListener("click", () => {
+  const addSelect = document.querySelector("#routeEditorAddSelect");
+  if (!addSelect.value) return;
+  const spot = findSpotAnywhere(addSelect.value);
+  if (!spot) return;
+  routeEditor.spots.push(spot);
+  renderRouteEditor();
+  drawRouteEditorOverlay();
+});
+document.querySelector("#saveRouteEditorButton").addEventListener("click", () => {
+  const draft = readRouteDraft() || {};
+  draft.spotIds = routeEditor.spots.map((spot) => spot.id);
+  draft.savedAt = new Date().toISOString();
+  writeRouteDraft(draft);
+  drawRoute(routeEditor.spots);
+  closeRouteEditor();
+  showToast("路线已保存，刷新后也会保留");
+});
+
+// 恢复上次的推荐路线草稿：页面加载后等图钉数据就绪，再高亮并画线（刷新不丢内容）
+(function restoreRouteDraft() {
+  const draft = readRouteDraft();
+  if (!draft) return;
+  if (draft.prompt) document.querySelector("#recommendInput").value = draft.prompt;
+  if (draft.resultText) document.querySelector("#recommendResult").textContent = draft.resultText;
+  const ids = draft.spotIds || [];
+  if (ids.length < 2) return;
+  const waitAndRestore = (tries) => {
+    const targets = ids.map((id) => findSpotAnywhere(id)).filter(Boolean);
+    if (targets.length >= 2) {
+      highlightSpots(targets, true);
+      showToast("已恢复上次的推荐路线");
+    } else if (tries > 0) setTimeout(() => waitAndRestore(tries - 1), 500);
+  };
+  waitAndRestore(20);
+})();
 
 // 地图图钉的数据源：公开模式用轻量全量数据，我的提交模式用本地列表
 function visibleSpots() {
@@ -879,6 +995,8 @@ document.querySelector("#recommendForm").addEventListener("submit", async (event
     }
     result.textContent = payload.recommendation || "推荐结果已返回，请查看地图点位。";
     highlightSpots(payload.spotIds || []);
+    // 暂存本次推荐（需求原文 + 结果文字 + 点位顺序）：强制刷新后自动恢复，也能进编辑路线调整
+    writeRouteDraft({ prompt: document.querySelector("#recommendInput").value.trim(), resultText: payload.recommendation || "", spotIds: payload.spotIds || [], savedAt: new Date().toISOString() });
   } catch (error) {
     result.textContent = error.message === "Failed to fetch" ? "推荐服务尚未连接，请先部署 Worker。" : error.message;
   } finally {

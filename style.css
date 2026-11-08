@@ -248,6 +248,12 @@ button { cursor: pointer; }
 .map-pick-create { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .map-pick-create input { margin-top: 0; flex: 1; min-width: 0; }
 
+/* 路线编辑器：站点清单（↑↓调序/移除）+ 添加点位 */
+.route-editor-list { display: grid; gap: 8px; }
+.route-editor-add { display: flex; align-items: center; gap: 10px; margin: 10px 0 14px; }
+.route-editor-add select { margin: 0; flex: 1; min-width: 0; }
+.route-editor-add .text-button { white-space: nowrap; }
+
 /* ---------------- 大众点评：评分、评论、头像、用户主页 ---------------- */
 .detail-modal { width: min(100%, 540px); }
 .detail-image { display: block; width: 100%; max-height: 220px; object-fit: cover; margin-bottom: 16px; border: 1px solid var(--line); }

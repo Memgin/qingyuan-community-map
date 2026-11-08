@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261102-23">
+  <link rel="stylesheet" href="style.css?v=20261102-25">
 </head>
 <body>
   <main class="app-shell">
@@ -55,6 +55,14 @@
       </div>
     </section>
 
+    <section class="detail-panel" id="routeEditorPanel" hidden>
+      <div class="detail-panel-head"><p class="eyebrow">ROUTE EDITOR / 编辑路线</p><button class="text-button" id="closeRouteEditorButton" type="button">← 退出编辑</button></div>
+      <p class="field-note">右侧大地图上的橙色线就是当前路线：用 ↑↓ 调整游玩顺序、移除不要的点、或从下拉里添加新点位——改完点「保存路线」，刷新后也会保留。</p>
+      <div id="routeEditorList" class="route-editor-list"></div>
+      <div class="route-editor-add"><select id="routeEditorAddSelect"></select><button class="text-button" id="routeEditorAddButton" type="button">+ 添加点位</button></div>
+      <button class="primary-button full-width" id="saveRouteEditorButton" type="button">保存路线</button>
+    </section>
+
     <section class="map-panel" aria-label="清远地图">
       <div id="map"></div>
       <div class="map-toolbar">
@@ -76,6 +84,7 @@
       <div id="seasonChips" class="season-chips"></div>
       <p id="recommendResult" class="recommend-result" role="status"></p>
       <p id="routeOrder" class="recommend-result" hidden></p>
+      <button class="text-button" id="routeEditorButton" type="button" hidden>✏️ 编辑路线</button>
       <button class="text-button" id="clearRouteButton" type="button" hidden>🧹 清除推荐路线</button>
       <div id="guideMap" class="guide-map"></div>
     </section>
@@ -242,6 +251,6 @@
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
   <script src="demo-data.js?v=20261102-1"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/simple-liquid-glass@5.6.0/dist/web-component.esm.js"></script>
-  <script src="app.js?v=20261102-45"></script>
+  <script src="app.js?v=20261102-46"></script>
 </body>
 </html>
