@@ -173,10 +173,15 @@ button { cursor: pointer; }
 .status-pill.rejected { background: rgba(235,118,94,.16); color: var(--coral); }
 
 /* 季节推荐：应季主题快捷入口（复用 AI 推荐接口，占整行排成一排） */
-.season-chips { display: flex; flex-wrap: wrap; gap: 8px; flex-basis: 100%; }
+.season-chips { display: flex; flex-wrap: wrap; gap: 8px; flex-basis: 100%; margin-top: 4px; }
 .season-chip { border: 1px solid rgba(25,43,42,.25); background: #fffdf6; padding: 7px 13px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--ink); transition: .15s; }
 .season-chip:hover { border-color: var(--green); color: var(--green); transform: translateY(-1px); }
 .season-chip.current { background: var(--green); border-color: var(--green); color: #fff; }
+/* 窄屏：季节按钮竖排（每行一个），与「开始推荐」拉开间距 */
+@media (max-width: 820px) {
+  .season-chips { flex-direction: column; align-items: stretch; margin-top: 18px; gap: 9px; }
+  .season-chip { text-align: center; padding: 12px; font-size: 12px; }
+}
 
 /* 详情左列就地面板：替代弹窗覆盖 hero 区域，右侧地图保留定位显示 */
 .detail-panel { grid-column: 1; padding: clamp(40px, 7vw, 96px) clamp(27px, 6vw, 86px); background: var(--panel); }
