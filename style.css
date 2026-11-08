@@ -208,9 +208,15 @@ button { cursor: pointer; }
 .map-detail-head .card-actions .text-button { font-size: 12px; }
 .map-detail-head .card-actions button[disabled] { opacity: .45; cursor: not-allowed; }
 .map-detail-head .card-actions .delete-map-button { color: var(--coral); }
-.auto-map-form { margin-top: 8px; }
-.map-form-label { margin: 0 0 6px; color: var(--ink); font-size: 11px; font-weight: 700; }
+/* 私人面板表单：竖排分区布局（覆盖共用的横排 flex 表单样式），label/引导语独立成行 */
+.private-panel #mapForm, .private-panel #autoMapForm { display: block; max-width: none; flex: none; }
+.private-panel #mapForm .primary-button, .private-panel #autoMapForm .primary-button { margin-top: 10px; }
+#autoMapForm { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line); }
+.map-form-label { display: block; margin: 0 0 6px; color: var(--ink); font-size: 11px; font-weight: 700; }
 .map-form-hint { margin: 8px 0 0; color: var(--muted); font-size: 11px; }
+.private-map-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.private-map-item { margin-right: 0; }
+.trash-toggle { display: block; margin-top: 16px; padding: 0; text-align: left; }
 .trash-toggle { display: block; margin-top: 12px; color: var(--muted); font-size: 12px; }
 .trash-toggle.active { color: var(--coral); }
 .collab-tag { margin-left: 4px; color: var(--coral); font-style: normal; font-size: 10px; }
