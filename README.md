@@ -159,7 +159,7 @@ npx wrangler pages secret put PUSH_CLIENT_SECRET # 华为推送 Client Secret
 npx wrangler d1 execute qingyuan-community-map --remote --file=worker/schema.sql
 ```
 
-按 `worker/` 下的迁移脚本顺序依次执行（auth → owner → moderation → quotas → category-school …）。最新一批：`migration-reviews.sql`（大众点评与评分、用户昵称头像）、`migration-ai-cache.sql`（AI 推荐结果缓存）、`migration-nav-stats.sql`（导航点击统计）、`worker/migration-share.sql`（私人地图分享令牌）、`worker/migration-trash.sql`（私人地图软删除）、`worker/migration-collab.sql`（私人地图协作表）。更早的：安全 / 注册 / 密码流程 / 推送 / 配图 / 纠偏等迁移见 `worker/` 与根目录。
+迁移脚本统一放在 `migrations/` 目录，按时间 / 主题顺序执行（早期：auth → owner → moderation → quotas → category-school；近期：security → registration → pwd-flow → push → photos → correction → reviews → ai-cache → nav-stats → share → trash → collab）。`worker/` 保留独立 Worker 工程本体（`src/` + `wrangler.toml` + `schema.sql`）。
 
 ### 4. 部署
 
@@ -241,20 +241,22 @@ npx wrangler pages deploy . --project-name qymap --branch main
 ├── recent.html         最近加入页（时间倒序 + 分类筛选）
 ├── all.html            全部地点页（网格浏览 + 评分入口）
 ├── shared.html         私人地图只读分享页（按令牌访问）
+├── admin.html          管理后台页面
 ├── app.js              前端逻辑（地图、列表、点评、私人地图、路线编辑、提交、同步）
 ├── all.js              全部地点页 / 最近加入页共用逻辑
-├── demo-data.js        本地演示数据兜底（仅 localhost 无后端时启用）
-├── admin.html          管理后台页面
 ├── admin.js            管理后台逻辑
+├── demo-data.js        本地演示数据兜底（仅 localhost 无后端时启用）
+├── style.css           样式
 ├── favicon.svg         网站图标（清远山水）
-├── style.css           样式（含大众点评与液态玻璃样式块）
-├── functions/          Cloudflare Pages Functions
+├── functions/          Cloudflare Pages Functions（API 实现）
 │   ├── api/[[path]].js 路由入口
 │   └── _lib/api.js     全部接口实现
-├── worker/             数据库 schema 与迁移脚本
-├── *_*.sql             根目录迁移脚本（点评、AI 缓存、设施导入、同步等）
-├── wrangler.toml       Cloudflare 配置
-└── *.md                项目文档
+├── worker/             独立 Worker 工程本体（src + wrangler.toml + schema.sql）
+├── migrations/         全部数据库迁移脚本（23 个，按时间顺序执行）
+├── docs/               项目文档（规划 / 评估 / 修复记录 / 功能清单）
+├── tools/              本地开发工具（serve_local.py + 启动本地服务.bat）
+├── wrangler.toml       Cloudflare Pages 配置
+└── README.md
 ```
 
 ---
@@ -273,12 +275,10 @@ npx wrangler pages deploy . --project-name qymap --branch main
 
 | 文档 | 内容 |
 | --- | --- |
-| `清远社区共享地图项目 · 完整实施规划文档.md` | 需求、功能清单、实现记录、历史问题与排查结论 |
-| `鸿蒙期末项目可行性评估.md` | 将本项目改造为 HarmonyOS（DevEco Studio）应用的可行性评估与完整任务清单 |
-| `功能总结-点评与评分.md` | 地点评分 + 大众点评功能的实现细节、接口清单与验证记录 |
-| `修复记录-向导区地图不显示.md` | 向导区小地图空白问题的根因（flex 收缩）与修复过程 |
-| `aiguide-待完成功能.md` | AI 向导地图功能清单（已完成 / 待实现，2026-11-08 更新） |
-| `新旧版本对比-私人地图改动记录-20261107.md` | 私人地图模块大改的功能清单、接口与安全设计 |
+| `docs/清远社区共享地图项目 · 完整实施规划文档.md` | 需求、功能清单、实现记录、历史问题与排查结论 |
+| `docs/鸿蒙期末项目可行性评估.md` | 将本项目改造为 HarmonyOS（DevEco Studio）应用的可行性评估与完整任务清单 |
+| `docs/修复记录-向导区地图不显示.md` | 向导区小地图空白问题的根因（flex 收缩）与修复过程 |
+| `docs/aiguide-待完成功能.md` | AI 向导地图功能清单（已完成 / 待实现，2026-11-08 更新） |
 
 ---
 
