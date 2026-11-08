@@ -11,13 +11,17 @@
 
 ### 浏览与发现
 - **地图浏览**：高德地图展示全部点位，分类筛选、点击定位、一键导航
+- **热门地点榜**：主页列表按**综合热度**排序（点赞×1 + 点评×2 + 导航×2），卡片显示 🔥 热度分；封面图缺失时用分类色渐变占位
+- **最近加入页**：`recent.html` 按时间倒序展示全部点位，带分类筛选与评分入口
 - **全部地点页**：`all.html` 网格展示所有点位，支持分类筛选，点击卡片跳回地图自动定位
 - **后端真分页**：列表按页取数据，翻页不卡顿
 - **后端搜索**：关键词由 SQL 匹配名称与简介，输入有 250ms 防抖
-- **分类筛选**：景点 / 美食 / 商圈 / 医疗 / 车站 / 学校，筛选交由后端完成
+- **分类筛选**：景点 / 美食 / 商圈 / 医疗 / 校园 / 交通，筛选交由后端完成
+- **详情就地面板**：点击详情不再弹窗，左侧 hero 区域就地切换为详情页（评分、点评、发表表单），**右侧地图保留**定位显示，对应图钉高亮区分
+- **导航点击统计**：跳转高德前 `sendBeacon` 上报（不阻塞跳转），导航次数计入综合热度，导航多的地点更靠前
 
 ### 提交与核验
-- **提交点位**：填写名称、地址、简介，支持地图选点与配图（JPG / PNG / WebP，≤2MB）
+- **提交点位**：填写名称、地址、简介，支持地图选点与**多图上传**（最多 10 张、总共 20MB；第一张作封面，其余进照片墙）
 - **高德自动核验**：名称命中高德 POI 即**自动上线**，无需人工审核；坐标由高德结果自动校正，用户不必精确点选
 - **重复拦截**：同名同分类、或坐标距离小于 0.001 度会被判为重复提交
 
@@ -62,14 +66,15 @@
 ### 管理后台
 标签页布局，六个板块，密钥在会话内自动记忆：
 - **① 待审核点位**：通过 / 拒绝
-- **② 全部点位**：按名称搜索、按状态筛选、删除违规内容（级联清理点赞 / 举报 / 收藏）
+- **② 全部点位**：表格化布局，按名称/地址搜索、**彩色圆点分类筛选**、状态筛选、**行内修改分类**（选择即保存并触发增量同步）、删除违规内容（级联清理点评 / 点赞 / 举报 / 收藏）
 - **③ 举报处理**
 - **④ 账号与密码**：密码重置申请审批（一键同意并推送临时密码；无法安全送达的可删除转人工）、手动重置密码
 - **⑤ 位置纠偏**：审批用户提交的坐标修正（新旧坐标对照，同意即移动点位）
 - **⑥ 诊断工具**：高德接口自检（不暴露 Key）
 
 ### 界面
-- **液态玻璃**：顶栏与地点详情弹窗接入 [simple-liquid-glass](https://github.com/lucaperullo/simple-liquid-glass)（CDN 锁定 5.6.0，Web Component 纯视觉层，`pointer-events: none` 不拦截交互，CDN 失败自动降级为半透明底色）
+- **液态玻璃**：顶栏接入 [simple-liquid-glass](https://github.com/lucaperullo/simple-liquid-glass)（CDN 锁定 5.6.0，Web Component 纯视觉层，`pointer-events: none` 不拦截交互，CDN 失败自动降级为半透明底色）
+- **地点卡片**：封面锚点（无图用分类色渐变占位）+ 评分元信息行 + 聚合互动行；次要操作（收藏/补图/编辑/举报/删除）收进「⋯」菜单
 
 ### 多端同步与离线能力
 | 能力 | 说明 |
@@ -143,7 +148,7 @@ npx wrangler pages secret put PUSH_CLIENT_SECRET # 华为推送 Client Secret
 npx wrangler d1 execute qingyuan-community-map --remote --file=worker/schema.sql
 ```
 
-按 `worker/` 下的迁移脚本顺序依次执行（auth → owner → moderation → quotas → category-school …）。根目录迁移脚本按文件名时间顺序执行，最新一批：`migration-security.sql`（登录防护/会话）、`migration-registration.sql`（注册限额）、`migration-pwd-flow.sql`（密码重置申请与强制改密）、`migration-push.sql`（推送 Token）、`migration-photos.sql`（点位配图）、`migration-correction.sql`（位置纠偏）、`migration-reviews.sql`（大众点评与评分、用户昵称头像）、`migration-ai-cache.sql`（AI 推荐结果缓存）。
+按 `worker/` 下的迁移脚本顺序依次执行（auth → owner → moderation → quotas → category-school …）。根目录迁移脚本按文件名时间顺序执行，最新一批：`migration-security.sql`（登录防护/会话）、`migration-registration.sql`（注册限额）、`migration-pwd-flow.sql`（密码重置申请与强制改密）、`migration-push.sql`（推送 Token）、`migration-photos.sql`（点位配图）、`migration-correction.sql`（位置纠偏）、`migration-reviews.sql`（大众点评与评分、用户昵称头像）、`migration-ai-cache.sql`（AI 推荐结果缓存）、`migration-nav-stats.sql`（导航点击统计）。
 
 ### 4. 部署
 
@@ -161,12 +166,13 @@ npx wrangler pages deploy . --project-name qymap --branch main
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/spots?page=&limit=&category=&q=&since=&fields=` | 点位列表，返回 `data` 与 `total`（附带 `avg_rating` / `review_count`，未迁移旧库自动降级）；`fields=map` 返回图钉轻量字段 |
+| GET | `/spots?page=&limit=&category=&q=&since=&sort=&fields=` | 点位列表（附带 `avg_rating` / `review_count` / `hot_score`，未迁移旧库自动降级）；`sort=hot` 综合热度、`sort=likes` 点赞、默认时间序；`fields=map` 返回图钉轻量字段 |
 | POST | `/spots` | 提交点位（需登录 + `X-Owner-Token`），支持 `client_token` 幂等 |
 | DELETE | `/spots/:id` | 删除自己提交的点位 |
 | POST | `/spots/:id/like` | 点赞（登录时按账号记录） |
 | POST | `/spots/:id/report` | 举报 |
 | POST | `/spots/:id/correction` | 位置纠偏（需登录，提交坐标修正建议） |
+| POST | `/spots/:id/navigate` | 导航点击埋点（公开，`sendBeacon` 上报；IP 限流 60 次/小时，计入综合热度） |
 | GET / POST | `/spots/:id/reviews` | 点评列表 + 评分统计 / 发表或修改点评（UPSERT，一人一店一条，需登录） |
 | DELETE | `/reviews/:id` | 删除自己的点评（匿名点评仅作者可删） |
 | GET | `/my-spots` | 我提交的点位 |
@@ -194,6 +200,7 @@ npx wrangler pages deploy . --project-name qymap --branch main
 | GET / PATCH | `/admin/spots`、`/admin/spots/:id/status` | 管理：待审核列表、审核 |
 | GET | `/admin/spots/all?status=&q=` | 管理：任意状态点位列表 |
 | DELETE | `/admin/spots/:id` | 管理：删除点位（级联清理） |
+| POST | `/admin/spots/:id/category` | 管理：修改点位分类（更新 `updated_at` 触发增量同步） |
 | GET | `/admin/amap-check` | 管理：高德接口自检 |
 | GET | `/admin/reset-requests` | 管理：待审批密码重置申请 |
 | POST | `/admin/reset-requests/:id/handle` | 管理：同意申请（重置 + 推送临时密码 + 踢会话） |
@@ -212,9 +219,10 @@ npx wrangler pages deploy . --project-name qymap --branch main
 .
 ├── index.html          前端主页
 ├── register.html       独立注册页（Turnstile 与主页隔离）
+├── recent.html         最近加入页（时间倒序 + 分类筛选）
 ├── all.html            全部地点页（网格浏览 + 评分入口）
 ├── app.js              前端逻辑（地图、列表、点评、提交、同步）
-├── all.js              全部地点页逻辑
+├── all.js              全部地点页 / 最近加入页共用逻辑
 ├── demo-data.js        本地演示数据兜底（仅 localhost 无后端时启用）
 ├── admin.html          管理后台页面
 ├── admin.js            管理后台逻辑
