@@ -692,7 +692,11 @@ function renderList() {
     // 原实现用 `Number(state.likes[id]) > 0` 兜底，但 state.likes 存的是点赞总数
     const liked = spot.liked === true;
     const likes = `${liked ? "♥" : "♡"} ${likeCount}`;
-    const image = spot.image_url ? `<img class="spot-image" src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">` : "";
+    // 封面是卡片的第一视觉锚点（Google Maps / 大众点评模式：带图卡片点击率显著更高）；
+    // 无图时用分类色渐变 + 图标占位，避免卡片空洞
+    const cover = spot.image_url
+      ? `<img class="spot-cover" src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">`
+      : `<div class="cover-banner" style="background:linear-gradient(135deg, ${item.color}, ${item.color}b3)"><span>${item.icon}</span></div>`;
     // 提交者：编辑（分类/主图）；其他登录用户：补图（往照片墙追加）
     const editButton = spot.isOwner ? `<button class="edit-button" data-edit-id="${spot.id}" type="button">编辑分类 / 配图</button>` : (state.currentUser ? `<button class="edit-button" data-edit-id="${spot.id}" type="button">补图</button>` : "");
     const deleteButton = spot.isOwner ? `<button class="delete-button" data-delete-id="${spot.id}" type="button">删除地点</button>` : "";
@@ -702,9 +706,13 @@ function renderList() {
     const moreItems = [saveButton, editButton, reportButton, deleteButton].filter(Boolean);
     const moreMenu = moreItems.length ? `<span class="more-menu-wrap"><button class="more-button" type="button" aria-label="更多操作">⋯</button><span class="more-menu">${moreItems.join("")}</span></span>` : "";
     const pendingTag = spot.status === "pending" ? `<span class="pending-tag">待审核</span>` : "";
-    const hotBadge = Number.isFinite(Number(spot.hot_score)) && Number(spot.hot_score) > 0 ? `<small title="点赞 + 点评×2 + 导航×2">🔥 ${spot.hot_score}</small>` : "";
+    const hotBadge = Number.isFinite(Number(spot.hot_score)) && Number(spot.hot_score) > 0 ? `<span class="footer-stat" title="点赞 + 点评×2 + 导航×2">🔥 ${spot.hot_score}</span>` : "";
+    // 评分与分类合并为一行元信息（大众点评模式：星级 + 条数 + 品类相邻呈现）
+    const metaLine = spot.review_count
+      ? `<span class="stars">${starsHTML(spot.avg_rating)}</span> ${Number(spot.avg_rating).toFixed(1)}（${spot.review_count} 条） · ${item.label}`
+      : `${item.label} · ${spot.address ? escapeHTML(spot.address.split(" ")[0]) : "待补充"}`;
     const address = escapeHTML(spot.address || "地图上的目的地");
-    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}" data-spot-id="${spot.id}">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}${pendingTag}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div>${ratingLineHTML(spot)}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true" data-nav-id="${spot.id}">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button>${hotBadge}<span class="card-actions">${moreMenu}</span></div></article>`;
+    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}" data-spot-id="${spot.id}">${cover}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}${pendingTag}</h3></div><div class="card-meta">${metaLine}</div><a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true" data-nav-id="${spot.id}">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button><span class="footer-stat">💬 ${spot.review_count || 0}</span>${hotBadge}<span class="card-actions">${moreMenu}</span></div></article>`;
   };
   spotList.innerHTML = list.length ? list.map(cardHTML).join("") : '<div class="empty-state">没有找到匹配的地点，换个关键词试试。</div>';
   document.querySelector("#pageInfo").textContent = `${state.page} / ${totalPages}`;

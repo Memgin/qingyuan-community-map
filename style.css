@@ -133,9 +133,16 @@ button { cursor: pointer; }
   .form-grid { grid-template-columns: 1fr; gap: 0; }
 }
 
-/* 卡片底部重构：高频操作（点赞/热度）外露，次要操作收进「⋯」菜单 */
+/* 卡片重设计（参考 Google Maps / 大众点评）：封面锚点 + 评分元信息行 + 聚合互动行 */
+.spot-cover { display: block; width: calc(100% + 30px); margin: -15px -15px 12px; height: 118px; object-fit: cover; }
+.cover-banner { display: grid; place-items: center; width: calc(100% + 30px); margin: -15px -15px 12px; height: 96px; font-size: 38px; font-weight: 700; color: rgba(255,255,255,.92); text-shadow: 0 2px 8px rgba(0,0,0,.22); }
+.card-meta { margin: -2px 0 9px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.card-meta .stars { margin-right: 3px; }
+.card-footer { justify-content: flex-start; gap: 14px; }
 .card-footer .like-button { font-size: 12px; }
 .card-footer small { color: var(--muted); }
+.footer-stat { color: var(--muted); font-size: 12px; }
+.card-actions { margin-left: auto; }
 .more-menu-wrap { position: relative; display: inline-flex; }
 .more-button { border: 0; background: none; padding: 0 6px; color: var(--muted); font-size: 17px; line-height: 1; letter-spacing: 1px; }
 .more-button:hover { color: var(--ink); }
