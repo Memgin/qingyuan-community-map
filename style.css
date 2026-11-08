@@ -163,6 +163,8 @@ button { cursor: pointer; }
 /* 详情左列就地面板：替代弹窗覆盖 hero 区域，右侧地图保留定位显示 */
 .detail-panel { grid-column: 1; padding: clamp(40px, 7vw, 96px) clamp(27px, 6vw, 86px); background: var(--panel); }
 .detail-panel[hidden], .intro-panel[hidden] { display: none !important; }
+.detail-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.detail-panel-head .eyebrow { margin-bottom: 0; }
 .detail-panel h2 { margin: 6px 0 0; font-family: "Noto Serif SC", serif; font-size: 27px; }
 .detail-panel .detail-image { max-height: 200px; }
 .detail-panel .close-button { display: none; }
