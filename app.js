@@ -673,7 +673,14 @@ function renderList() {
   const totalPages = Math.max(1, Math.ceil(totalCount / state.pageSize));
   state.page = Math.min(Math.max(1, state.page), totalPages);
   const list = state.myOnly ? state.spots.slice((state.page - 1) * state.pageSize, state.page * state.pageSize) : state.spots;
-  spotList.innerHTML = list.length ? list.map((spot) => {
+  // 按分类分组展示：组序按 categories 定义顺序，组内保持后端返回的时间倒序
+  const grouped = new Map();
+  list.forEach((spot) => {
+    if (!grouped.has(spot.category)) grouped.set(spot.category, []);
+    grouped.get(spot.category).push(spot);
+  });
+  const categoryOrder = Object.keys(categories).filter((key) => key !== "all");
+  const groupCardHTML = (spot) => {
     const item = categories[spot.category];
     const likeCount = state.likes[spot.id] ?? spot.likes ?? 0;
     // liked 由后端按账号返回，保证网页与 App 的点赞状态一致
@@ -690,7 +697,13 @@ function renderList() {
     const statusText = spot.status === "pending" ? "待审核 · 点击查看位置" : "点击查看点评";
     const address = escapeHTML(spot.address || "地图上的目的地");
     return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}" data-spot-id="${spot.id}">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div>${ratingLineHTML(spot)}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><small>${statusText}</small><span class="card-actions">${editButton}${saveButton}${reportButton}${deleteButton}<button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button></span></div></article>`;
-  }).join("") : '<div class="empty-state">没有找到匹配的地点，换个关键词试试。</div>';
+  };
+  spotList.innerHTML = list.length ? [...grouped.entries()]
+    .sort((a, b) => categoryOrder.indexOf(a[0]) - categoryOrder.indexOf(b[0]))
+    .map(([category, spots]) => {
+      const item = categories[category] || { label: category, color: "#2F6D5A" };
+      return `<div class="list-group"><div class="list-group-head"><span class="chip-dot" style="--chip-color:${item.color}"></span>${item.label}<small>${spots.length} 个</small></div><div class="spot-list">${spots.map(groupCardHTML).join("")}</div></div>`;
+    }).join("") : '<div class="empty-state">没有找到匹配的地点，换个关键词试试。</div>';
   document.querySelector("#pageInfo").textContent = `${state.page} / ${totalPages}`;
   document.querySelector("#previousPageButton").disabled = state.page <= 1;
   document.querySelector("#nextPageButton").disabled = state.page >= totalPages;
