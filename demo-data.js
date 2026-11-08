@@ -57,7 +57,12 @@
       reviews: JSON.parse(JSON.stringify(seedReviews)),
       likedBy: {},
       currentUser: null,
-      nextReviewId: 100
+      nextReviewId: 100,
+      maps: [],
+      mapSpots: {},
+      nextMapId: 1,
+      collab: {},
+      nextUserId: 1000
     };
   }
   function loadStore() {
@@ -65,7 +70,15 @@
       const raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         const store = JSON.parse(raw);
-        if (store && Array.isArray(store.spots) && Array.isArray(store.reviews)) return store;
+        if (store && Array.isArray(store.spots) && Array.isArray(store.reviews)) {
+          // 旧版本演示数据没有私人地图字段，补默认值避免报错
+          if (!Array.isArray(store.maps)) store.maps = [];
+          if (!store.mapSpots || typeof store.mapSpots !== "object") store.mapSpots = {};
+          if (!store.nextMapId) store.nextMapId = 1;
+          if (!store.collab || typeof store.collab !== "object") store.collab = {};
+          if (!store.nextUserId) store.nextUserId = 1000;
+          return store;
+        }
       }
     } catch { /* 存储不可用时回到内存种子 */ }
     return defaultStore();
@@ -215,10 +228,17 @@
       const username = String(body.username || "").trim();
       if (username.length < 2) return json({ error: "请输入用户名（演示环境任意账号密码均可）" }, 400);
       const now = new Date().toISOString().slice(0, 19).replace("T", " ");
-      const existing = userById(999);
-      const user = existing || { id: 999, username, nickname: null, avatar_url: null, created_at: now };
-      user.username = username;
-      if (!existing) store.users.push(user);
+      // 按用户名区分身份：同名登录回到同一身份，不同用户名各建一个账号——协作功能需要多用户
+      let user = store.users.find((u) => u.username === username && u.id !== 999);
+      if (!user) {
+        const legacy = userById(999);
+        if (legacy && legacy.username === username) {
+          user = legacy;
+        } else {
+          user = { id: store.nextUserId++, username, nickname: null, avatar_url: null, created_at: now };
+          store.users.push(user);
+        }
+      }
       store.currentUser = user;
       persist();
       return json({ token: DEMO_TOKEN, user: { id: user.id, username: user.username, nickname: user.nickname || null, avatar_url: user.avatar_url || null } }, 201);
@@ -263,6 +283,214 @@
       const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") || 20)));
       const slice = spots.slice((page - 1) * limit, page * limit);
       return json({ data: slice.map(withRating), page, limit, total: spots.length });
+    }
+    /* ---------------- 私人地图（演示） ---------------- */
+    if (path === "/api/maps" && method === "GET") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      store.maps = store.maps || [];
+      const visible = store.maps.filter((m) => !m.deleted_at && (m.user_id === viewer.id || (store.collab[m.id] || []).includes(viewer.id)));
+      return json({ data: visible.map((m) => ({ id: m.id, name: m.name, description: m.description, created_at: m.created_at, spot_ids: (store.mapSpots[m.id] || []).slice(), shared: !!m.share_token, role: m.user_id === viewer.id ? "owner" : "editor" })) });
+    }
+    if (path === "/api/maps" && method === "POST") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      const name = String(body.name || "").trim();
+      if (name.length < 2 || name.length > 40) return json({ error: "私人地图名称需为 2-40 个字符" }, 400);
+      const id = store.nextMapId++;
+      store.maps.push({ id, user_id: viewer.id, name, description: String(body.description || "").slice(0, 120), created_at: new Date().toISOString().slice(0, 19).replace("T", " ") });
+      store.mapSpots[id] = [];
+      persist();
+      return json({ id, name }, 201);
+    }
+    const mapSpotAdd = path.match(/^\/api\/maps\/(\d+)\/spots$/);
+    if (mapSpotAdd && method === "POST") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      const mapId = Number(mapSpotAdd[1]);
+      const map = (store.maps || []).find((m) => m.id === mapId && !m.deleted_at && (m.user_id === viewer.id || (store.collab[m.id] || []).includes(viewer.id)));
+      if (!map) return json({ error: "私人地图不存在" }, 404);
+      const spotId = Number(body.spot_id);
+      if (!store.spots.some((s) => s.id === spotId)) return json({ error: "公共地点不存在" }, 404);
+      store.mapSpots[mapId] = store.mapSpots[mapId] || [];
+      const existed = store.mapSpots[mapId].includes(spotId);
+      if (!existed) { store.mapSpots[mapId].push(spotId); persist(); }
+      return json({ map_id: mapId, spot_id: spotId, added: !existed }, existed ? 200 : 201);
+    }
+    if (mapSpotAdd && method === "GET") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      const mapId = Number(mapSpotAdd[1]);
+      const map = (store.maps || []).find((m) => m.id === mapId && !m.deleted_at && (m.user_id === viewer.id || (store.collab[m.id] || []).includes(viewer.id)));
+      if (!map) return json({ error: "私人地图不存在" }, 404);
+      const ids = store.mapSpots[mapId] || [];
+      return json({ data: ids.map((id) => store.spots.find((s) => s.id === id)).filter(Boolean).map(withRating) });
+    }
+    const mapSpotRemove = path.match(/^\/api\/maps\/(\d+)\/spots\/(\d+)$/);
+    if (mapSpotRemove && method === "DELETE") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      const mapId = Number(mapSpotRemove[1]);
+      const spotId = Number(mapSpotRemove[2]);
+      const map = (store.maps || []).find((m) => m.id === mapId && !m.deleted_at && (m.user_id === viewer.id || (store.collab[m.id] || []).includes(viewer.id)));
+      if (!map) return json({ error: "私人地图不存在" }, 404);
+      const list = store.mapSpots[mapId] || [];
+      const index = list.indexOf(spotId);
+      if (index === -1) return json({ error: "该点位不在此地图中" }, 404);
+      list.splice(index, 1);
+      persist();
+      return json({ map_id: mapId, spot_id: spotId, removed: true });
+    }
+    const mapIdOnly = path.match(/^\/api\/maps\/(\d+)$/);
+    if (mapIdOnly && method === "PATCH") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      const map = (store.maps || []).find((m) => m.id === Number(mapIdOnly[1]) && !m.deleted_at && (m.user_id === viewer.id || (store.collab[m.id] || []).includes(viewer.id)));
+      if (!map) return json({ error: "私人地图不存在" }, 404);
+      if (body.name !== undefined) {
+        const name = String(body.name || "").trim();
+        if (name.length < 2 || name.length > 40) return json({ error: "私人地图名称需为 2-40 个字符" }, 400);
+        map.name = name;
+      }
+      if (body.description !== undefined) map.description = String(body.description || "").slice(0, 120);
+      persist();
+      return json({ id: map.id, name: map.name });
+    }
+    if (mapIdOnly && method === "DELETE") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      const index = (store.maps || []).findIndex((m) => m.id === Number(mapIdOnly[1]) && m.user_id === viewer.id);
+      if (index === -1) return json({ error: "私人地图不存在" }, 404);
+      const map = store.maps[index];
+      if (url.searchParams.get("permanent") === "1") {
+        // 彻底删除：从回收站清掉，不可恢复
+        store.maps.splice(index, 1);
+        delete store.mapSpots[map.id];
+        delete store.collab[map.id];
+        persist();
+        return json({ removed: true, id: map.id, permanent: true });
+      }
+      // 软删除：打上删除时间戳进回收站，30 天内可恢复
+      map.deleted_at = new Date().toISOString().slice(0, 19).replace("T", " ");
+      persist();
+      return json({ removed: true, id: map.id, trash: true });
+    }
+    if (path === "/api/maps/trash" && method === "GET") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      // 顺带清理超过 30 天的回收站地图
+      (store.maps || []).filter((m) => m.deleted_at && new Date(m.deleted_at.replace(" ", "T")).getTime() < cutoff).forEach((m) => {
+        delete store.mapSpots[m.id];
+        delete store.collab[m.id];
+      });
+      store.maps = store.maps.filter((m) => !(m.deleted_at && new Date(m.deleted_at.replace(" ", "T")).getTime() < cutoff));
+      persist();
+      const rows = store.maps.filter((m) => m.user_id === viewer.id && m.deleted_at)
+        .sort((a, b) => String(b.deleted_at).localeCompare(String(a.deleted_at)))
+        .map((m) => ({ id: m.id, name: m.name, deleted_at: m.deleted_at, spot_count: (store.mapSpots[m.id] || []).length }));
+      return json({ data: rows });
+    }
+    const mapRestore = path.match(/^\/api\/maps\/(\d+)\/restore$/);
+    if (mapRestore && method === "POST") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      const map = (store.maps || []).find((m) => m.id === Number(mapRestore[1]) && m.user_id === viewer.id && m.deleted_at);
+      if (!map) return json({ error: "地图不在回收站中" }, 404);
+      delete map.deleted_at;
+      persist();
+      return json({ restored: true, id: map.id });
+    }
+    const mapCollab = path.match(/^\/api\/maps\/(\d+)\/collaborators$/);
+    if (mapCollab && method === "GET") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      const mapId = Number(mapCollab[1]);
+      const map = (store.maps || []).find((m) => m.id === mapId && !m.deleted_at && (m.user_id === viewer.id || (store.collab[m.id] || []).includes(viewer.id)));
+      if (!map) return json({ error: "私人地图不存在" }, 404);
+      const members = (store.collab[mapId] || []).map((id) => store.users.find((u) => u.id === id)).filter(Boolean)
+        .map((u) => ({ id: u.id, username: u.username, nickname: u.nickname, avatar_url: u.avatar_url }));
+      return json({ data: members, isOwner: map.user_id === viewer.id });
+    }
+    if (mapCollab && method === "POST") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      const mapId = Number(mapCollab[1]);
+      const map = (store.maps || []).find((m) => m.id === mapId && m.user_id === viewer.id && !m.deleted_at);
+      if (!map) return json({ error: "只有地图主人可以管理协作者" }, map ? 403 : 404);
+      // 重名消歧：先按用户名精确匹配，再按昵称；昵称撞名时返回候选列表
+      let target = null;
+      if (body.user_id) {
+        target = store.users.find((u) => u.id === Number(body.user_id));
+        if (!target) return json({ error: "用户不存在" }, 404);
+      } else {
+        const username = String(body.username || "").trim();
+        if (username.length < 2) return json({ error: "请输入对方的用户名" }, 400);
+        target = store.users.find((u) => u.username === username);
+        if (!target) {
+          const matches = store.users.filter((u) => u.nickname === username).slice(0, 6);
+          if (!matches.length) return json({ error: "用户不存在，请确认对方已注册" }, 404);
+          if (matches.length === 1) target = matches[0];
+          else return json({ error: `有 ${matches.length} 位用户昵称相同，请选择具体用户`, candidates: matches.map((u) => ({ id: u.id, username: u.username, nickname: u.nickname, avatar_url: u.avatar_url })) }, 409);
+        }
+      }
+      if (target.id === viewer.id) return json({ error: "不需要添加自己" }, 400);
+      store.collab[mapId] = store.collab[mapId] || [];
+      const existed = store.collab[mapId].includes(target.id);
+      if (!existed) { store.collab[mapId].push(target.id); persist(); }
+      return json({ added: !existed, user: { id: target.id, username: target.username, nickname: target.nickname, avatar_url: target.avatar_url } }, existed ? 200 : 201);
+    }
+    const mapCollabRemove = path.match(/^\/api\/maps\/(\d+)\/collaborators\/(\d+)$/);
+    if (mapCollabRemove && method === "DELETE") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      const mapId = Number(mapCollabRemove[1]);
+      const map = (store.maps || []).find((m) => m.id === mapId && m.user_id === viewer.id && !m.deleted_at);
+      if (!map) return json({ error: "只有地图主人可以管理协作者" }, map ? 403 : 404);
+      const list = store.collab[mapId] || [];
+      const index = list.indexOf(Number(mapCollabRemove[2]));
+      if (index === -1) return json({ error: "该用户不是这张地图的协作者" }, 404);
+      list.splice(index, 1);
+      persist();
+      return json({ removed: true, id: mapId, user_id: Number(mapCollabRemove[2]) });
+    }
+    const mapShare = path.match(/^\/api\/maps\/(\d+)\/share$/);
+    if (mapShare && method === "POST") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      const map = (store.maps || []).find((m) => m.id === Number(mapShare[1]) && m.user_id === viewer.id && !m.deleted_at);
+      if (!map) return json({ error: "私人地图不存在" }, 404);
+      if (!map.share_token) {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        map.share_token = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+        persist();
+      }
+      return json({ share_token: map.share_token });
+    }
+    if (mapShare && method === "DELETE") {
+      if (!viewer) return json({ error: "请先登录" }, 401);
+      const map = (store.maps || []).find((m) => m.id === Number(mapShare[1]) && m.user_id === viewer.id);
+      if (!map) return json({ error: "私人地图不存在" }, 404);
+      map.share_token = null;
+      persist();
+      return json({ revoked: true, id: map.id });
+    }
+    const sharedMap = path.match(/^\/api\/shared\/([a-f0-9]{16,64})$/);
+    if (sharedMap && method === "GET") {
+      const map = (store.maps || []).find((m) => m.share_token === sharedMap[1] && !m.deleted_at);
+      if (!map) return json({ error: "分享链接无效" }, 404);
+      const ids = store.mapSpots[map.id] || [];
+      return json({ map: { name: map.name, description: map.description }, spots: ids.map((id) => store.spots.find((s) => s.id === id)).filter(Boolean) });
+    }
+    if (path === "/api/maps/auto" && method === "POST") {
+      if (!viewer) return json({ error: "请先登录后再使用 AI 功能" }, 401);
+      const theme = String(body.theme || "").trim();
+      if (theme.length < 2 || theme.length > 200) return json({ error: "请输入 2-200 字的主题" }, 400);
+      // 演示环境没有模型：按主题关键词在点位名称/简介里打分挑选，最多 5 个
+      const keywords = theme.split(/[，。！？、\s,!?]+/).filter((word) => word.length >= 2);
+      const scored = store.spots
+        .map((spot) => {
+          const text = `${spot.name}${spot.description}${spot.category}`;
+          const score = keywords.reduce((total, word) => total + (text.includes(word) ? 1 : 0), 0);
+          return { spot, score };
+        })
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5);
+      const picked = (scored.length >= 2 ? scored : store.spots.slice(0, 4)).map((item) => item.spot || item);
+      const id = store.nextMapId++;
+      store.maps.push({ id, user_id: viewer.id, name: theme.slice(0, 40), description: "AI 根据主题自动挑选的地点清单（演示）", created_at: new Date().toISOString().slice(0, 19).replace("T", " ") });
+      store.mapSpots[id] = picked.map((spot) => spot.id);
+      persist();
+      return json({ id, name: theme.slice(0, 40), spot_ids: store.mapSpots[id] }, 201);
     }
     return json({ error: "Not found" }, 404);
   }

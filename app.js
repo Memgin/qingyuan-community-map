@@ -115,7 +115,7 @@ document.querySelector("#correctionSubmit").addEventListener("click", async () =
 document.querySelector("#correctionCancel").addEventListener("click", exitCorrectionMode);
 let currentLocationMarker = null;
 
-const state = { spots: [], mapSpots: [], total: 0, filter: "all", query: "", page: 1, pageSize: 4, markers: [], likes: getLikes(), pickingLocation: false, myOnly: false, currentUser: null, authMode: "login", highlightIds: new Set() };
+const state = { spots: [], mapSpots: [], total: 0, filter: "all", query: "", page: 1, pageSize: 4, markers: [], likes: getLikes(), pickingLocation: false, myOnly: false, currentUser: null, authMode: "login", highlightIds: new Set(), myMaps: [], savedMapName: {}, openMapId: null, pickSpotId: null };
 let nearbyFacilities = []; // 金融学院周边检索结果的缓存，防止登录/刷新合并时丢失
 const spotList = document.querySelector("#spotList");
 const spotCount = document.querySelector("#spotCount");
@@ -700,7 +700,9 @@ function renderList() {
     // 提交者：编辑（分类/主图）；其他登录用户：补图（往照片墙追加）
     const editButton = spot.isOwner ? `<button class="edit-button" data-edit-id="${spot.id}" type="button">编辑分类 / 配图</button>` : (state.currentUser ? `<button class="edit-button" data-edit-id="${spot.id}" type="button">补图</button>` : "");
     const deleteButton = spot.isOwner ? `<button class="delete-button" data-delete-id="${spot.id}" type="button">删除地点</button>` : "";
-    const saveButton = state.currentUser && !state.myOnly ? `<button class="save-map-button" data-map-spot-id="${spot.id}" type="button">收藏到我的地图</button>` : "";
+    // 已收藏标记：state.savedMapName 由 loadMaps 构建（spotId → 地图名）
+    const savedName = state.savedMapName[String(spot.id)];
+    const saveButton = state.currentUser && !state.myOnly ? `<button class="save-map-button ${savedName ? "saved" : ""}" data-map-spot-id="${spot.id}" type="button" ${savedName ? `title="已收藏到：${escapeHTML(savedName)}，点击可换一张地图"` : ""}>${savedName ? "已收藏 ✓" : "收藏"}</button>` : "";
     const reportButton = !state.myOnly ? `<button class="report-button" data-report-id="${spot.id}" type="button">举报</button>` : "";
     // 次要操作收进「⋯」菜单：底部只留高频的点赞与热度，避免窄卡片溢出
     const moreItems = [saveButton, editButton, reportButton, deleteButton].filter(Boolean);
@@ -1113,24 +1115,440 @@ async function checkLogin() {
 }
 
 async function saveSpotToMap(spotId) {
+  if (!state.myMaps.length) { showToast("请先在下方创建私人地图"); document.querySelector("#mapForm input").focus(); return; }
+  // 只有一张地图直接收藏；多张时弹出选择器，避免所有收藏都堆进同一张
+  if (state.myMaps.length === 1) { await collectSpotToMap(state.myMaps[0].id, spotId); return; }
+  openMapPicker(spotId);
+}
+
+async function collectSpotToMap(mapId, spotId) {
   try {
-    const maps = await fetch(`${API_BASE}/maps`, { headers: authHeaders() }).then((response) => response.json());
-    if (!maps.data?.length) { showToast("请先在下方创建私人地图"); document.querySelector("#mapForm input").focus(); return; }
-    await fetch(`${API_BASE}/maps/${maps.data[0].id}/spots`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ spot_id: spotId }) });
-    showToast(`已收藏到：${maps.data[0].name}`);
+    const response = await apiFetch(`${API_BASE}/maps/${mapId}/spots`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ spot_id: spotId }) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "收藏失败");
+    const mapItem = state.myMaps.find((m) => m.id === Number(mapId));
+    if (payload.added === false) { showToast(`「${escapeHTML(spotNameById(spotId))}」已在 ${mapItem?.name || "该地图"} 中`); return; }
+    showToast(`已收藏到：${mapItem?.name || "私人地图"}`);
+    await loadMaps();
+    renderList();
   } catch { showToast("收藏失败，请稍后重试"); }
 }
 
+function spotNameById(spotId) {
+  const source = [...state.spots, ...state.mapSpots];
+  const spot = source.find((item) => String(item.id) === String(spotId));
+  return spot ? spot.name : "该地点";
+}
+
+/* ---------------- 收藏选择器：多张地图时选择收藏到哪张，也可现场新建 ---------------- */
+const mapPickBackdrop = document.querySelector("#mapPickBackdrop");
+
+function openMapPicker(spotId) {
+  state.pickSpotId = spotId;
+  const list = document.querySelector("#mapPickList");
+  list.innerHTML = state.myMaps.map((mapItem, index) => `<label class="map-pick-option"><input type="radio" name="pick-map" value="${mapItem.id}" ${index === 0 ? "checked" : ""}><span>${escapeHTML(mapItem.name)}</span><small>${(mapItem.spot_ids || []).length} 个点位</small></label>`).join("");
+  mapPickBackdrop.hidden = false;
+}
+
+document.querySelector("#closeMapPickButton").addEventListener("click", () => { mapPickBackdrop.hidden = true; });
+document.querySelector("#confirmMapPickButton").addEventListener("click", async () => {
+  const selected = document.querySelector('input[name="pick-map"]:checked');
+  if (!selected || !state.pickSpotId) return;
+  mapPickBackdrop.hidden = true;
+  await collectSpotToMap(Number(selected.value), state.pickSpotId);
+});
+document.querySelector("#createAndPickButton").addEventListener("click", async () => {
+  const name = document.querySelector("#mapPickNewName").value.trim();
+  if (name.length < 2) { showToast("地图名称需 2-40 个字符"); return; }
+  try {
+    const response = await apiFetch(`${API_BASE}/maps`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ name }) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "创建失败");
+    const newId = payload.id;
+    mapPickBackdrop.hidden = true;
+    document.querySelector("#mapPickNewName").value = "";
+    await loadMaps();
+    await collectSpotToMap(newId, state.pickSpotId);
+  } catch (error) { showToast(error.message || "创建失败"); }
+});
+
 async function loadMaps() {
-  const response = await fetch(`${API_BASE}/maps`, { headers: authHeaders() });
-  if (!response.ok) return;
+  const response = await apiFetch(`${API_BASE}/maps`, { headers: authHeaders() });
+  if (!response || !response.ok) return;
   const payload = await response.json();
-  document.querySelector("#privateMapList").innerHTML = payload.data?.length ? payload.data.map((mapItem) => `<span class="private-map-item">${escapeHTML(mapItem.name)}</span>`).join("") : "还没有私人地图";
+  state.myMaps = payload.data || [];
+  // 构建「已收藏」映射：spotId → 地图名（同一地点收藏进多张地图时显示第一张）
+  state.savedMapName = {};
+  state.myMaps.forEach((mapItem) => (mapItem.spot_ids || []).forEach((id) => { if (!state.savedMapName[String(id)]) state.savedMapName[String(id)] = mapItem.name; }));
+  renderPrivateMaps();
+  renderList();
+}
+
+function renderPrivateMaps() {
+  const container = document.querySelector("#privateMapList");
+  if (!state.myMaps.length) { container.innerHTML = "还没有私人地图"; return; }
+  container.innerHTML = state.myMaps.map((mapItem) => `<button class="private-map-item ${state.openMapId === mapItem.id ? "active" : ""}" data-map-id="${mapItem.id}" type="button">${escapeHTML(mapItem.name)}${mapItem.role === "editor" ? '<em class="collab-tag">协作</em>' : ""}<small>${(mapItem.spot_ids || []).length} 个点位</small></button>`).join("");
+  container.querySelectorAll(".private-map-item").forEach((button) => button.addEventListener("click", () => toggleMapDetail(Number(button.dataset.mapId))));
+}
+
+/* ---------------- 地图详情：点击地图名展开点位清单，可高亮定位、移除 ---------------- */
+async function toggleMapDetail(mapId) {
+  if (state.openMapId === mapId) {
+    state.openMapId = null;
+    renderPrivateMaps();
+    const detail = document.querySelector("#privateMapDetail");
+    detail.hidden = true;
+    detail.innerHTML = "";
+    return;
+  }
+  state.openMapId = mapId;
+  renderPrivateMaps();
+  await openMapDetail(mapId);
+}
+
+async function openMapDetail(mapId) {
+  const detail = document.querySelector("#privateMapDetail");
+  detail.hidden = false;
+  detail.innerHTML = '<span class="field-note">加载中……</span>';
+  const response = await apiFetch(`${API_BASE}/maps/${mapId}/spots`, { headers: authHeaders() });
+  if (!response || !response.ok) { detail.innerHTML = '<span class="field-note">加载失败，请稍后重试</span>'; return; }
+  const payload = await response.json();
+  const spots = payload.data || [];
+  const mapItem = state.myMaps.find((m) => m.id === mapId);
+  if (!spots.length) { detail.innerHTML = `<p class="field-note">「${escapeHTML(mapItem?.name || "该地图")}」还没有收藏点位，去上面的列表点「收藏」吧。</p>`; return; }
+  const isOwnerMap = mapItem?.role !== "editor";
+  const statusLabel = mapItem?.role === "editor" ? " · 协作地图" : (mapItem?.shared ? " · 已分享" : "");
+  // 删除/分享/成员管理仅主人可用；协作者可编辑点位与名称
+  const ownerActions = isOwnerMap ? `<button class="text-button share-map-button" type="button">分享</button>${mapItem?.shared ? '<button class="text-button unshare-map-button" type="button">取消分享</button>' : ""}<button class="remove-map-spot delete-map-button" type="button">删除地图</button>` : "";
+  detail.innerHTML = `<p class="private-map-detail-title"><span>「${escapeHTML(mapItem?.name || "")}」的 ${spots.length} 个点位${statusLabel}</span><span class="card-actions"><button class="text-button plan-route-button" type="button">顺路规划</button><button class="text-button collab-button" type="button">协作</button><button class="text-button rename-map-button" type="button">重命名</button>${ownerActions}</span></p>` + spots.map((spot) => `<div class="private-map-spot"><div class="private-map-spot-info"><strong>${escapeHTML(spot.name)}</strong><span>${escapeHTML(spot.address || "")}</span></div><span class="card-actions"><button class="text-button highlight-map-spot" data-spot-id="${spot.id}" type="button">主地图高亮</button><button class="remove-map-spot" data-spot-id="${spot.id}" type="button">移除</button></span></div>`).join("") + '<div id="collabSection" class="collab-section" hidden></div>';
+  detail.querySelectorAll(".highlight-map-spot").forEach((button) => button.addEventListener("click", () => highlightMapSpots(mapId)));
+  // 顺路规划：复用 AI 推荐的贪心排序 + 向导区小地图画线，把收藏点位串成一条路线
+  detail.querySelector(".plan-route-button").addEventListener("click", () => {
+    if (spots.length < 2) { showToast("这张地图至少要 2 个点位才能规划路线"); return; }
+    drawRoute(spots);
+    document.querySelector("#guideMap").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  // 只读分享：生成（或复用）分享令牌，拼成 shared.html 链接并复制（仅主人）
+  const shareButton = detail.querySelector(".share-map-button");
+  if (shareButton) shareButton.addEventListener("click", async () => {
+    const response2 = await apiFetch(`${API_BASE}/maps/${mapId}/share`, { method: "POST", headers: authHeaders() });
+    const payload2 = await response2.json().catch(() => ({}));
+    if (!response2 || !response2.ok) { showToast(payload2.error || "生成分享链接失败"); return; }
+    const url = `${location.origin}/shared.html?t=${payload2.share_token}`;
+    try { await navigator.clipboard.writeText(url); showToast("只读分享链接已复制，发给朋友即可查看"); }
+    catch { window.prompt("复制下面的只读分享链接", url); }
+  });
+  // 取消分享：令牌清空，之前发出的链接全部立即失效
+  const unshareButton = detail.querySelector(".unshare-map-button");
+  if (unshareButton) unshareButton.addEventListener("click", async () => {
+    if (!window.confirm("取消后，之前分享的链接将立即失效（再次点「分享」会生成新链接）。确定吗？")) return;
+    const response2 = await apiFetch(`${API_BASE}/maps/${mapId}/share`, { method: "DELETE", headers: authHeaders() });
+    if (!response2 || !response2.ok) { showToast("操作失败，请稍后重试"); return; }
+    showToast("已取消分享");
+    await loadMaps();
+    if (state.openMapId === mapId) await openMapDetail(mapId);
+  });
+  // 协作面板：主人可按用户名添加/移除协作者，双方都可查看成员
+  detail.querySelector(".collab-button").addEventListener("click", () => {
+    const section = detail.querySelector("#collabSection");
+    if (!section.hidden) { section.hidden = true; section.innerHTML = ""; return; }
+    renderCollabSection(section, mapId);
+  });
+  detail.querySelectorAll(".remove-map-spot").forEach((button) => button.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const response2 = await apiFetch(`${API_BASE}/maps/${mapId}/spots/${button.dataset.spotId}`, { method: "DELETE", headers: authHeaders() });
+    if (!response2 || !response2.ok) { showToast("移除失败，请稍后重试"); return; }
+    showToast("已从地图移除");
+    await loadMaps();
+    if (state.openMapId === mapId) await openMapDetail(mapId);
+  }));
+  // 重命名地图（与项目现有交互一致，用 prompt）
+  detail.querySelector(".rename-map-button").addEventListener("click", async () => {
+    const mapItem = state.myMaps.find((m) => m.id === mapId);
+    const name = window.prompt("新的地图名称（2-40 字符）", mapItem?.name || "");
+    if (!name || !name.trim()) return;
+    const response2 = await apiFetch(`${API_BASE}/maps/${mapId}`, { method: "PATCH", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ name: name.trim() }) });
+    const payload2 = await response2.json().catch(() => ({}));
+    if (!response2.ok) { showToast(payload2.error || "重命名失败"); return; }
+    showToast("已重命名");
+    await loadMaps();
+    if (state.openMapId === mapId) await openMapDetail(mapId);
+  });
+  // 删除地图：软删除进回收站，30 天内可在「最近删除」中恢复（仅主人）
+  const deleteButton = detail.querySelector(".delete-map-button");
+  if (deleteButton) deleteButton.addEventListener("click", async () => {
+    const mapItem = state.myMaps.find((m) => m.id === mapId);
+    if (!window.confirm(`确定删除「${mapItem?.name || "这张地图"}」吗？删除后可在「最近删除」中找回（保留 30 天）。`)) return;
+    const response2 = await apiFetch(`${API_BASE}/maps/${mapId}`, { method: "DELETE", headers: authHeaders() });
+    if (!response2 || !response2.ok) { showToast("删除失败，请稍后重试"); return; }
+    showToast("已移入回收站，30 天内可恢复");
+    state.openMapId = null;
+    const detail2 = document.querySelector("#privateMapDetail");
+    detail2.hidden = true;
+    detail2.innerHTML = "";
+    await loadMaps();
+  });
+}
+
+async function renderCollabSection(section, mapId) {
+  section.hidden = false;
+  section.innerHTML = '<span class="field-note">加载中……</span>';
+  const response = await apiFetch(`${API_BASE}/maps/${mapId}/collaborators`, { headers: authHeaders() });
+  const payload = await response.json().catch(() => ({}));
+  if (!response || !response.ok) { section.innerHTML = `<span class="field-note">${escapeHTML(payload.error || "加载失败")}</span>`; return; }
+  const members = payload.data || [];
+  const isOwner = !!payload.isOwner;
+  section.innerHTML = '<p class="private-map-detail-title"><span>协作成员（均可收藏/移除点位、重命名）</span></p>' +
+    (members.length ? members.map((member) => `<div class="private-map-spot"><div class="private-map-spot-info"><strong>${escapeHTML(member.nickname || member.username)}</strong><span>@${escapeHTML(member.username)}</span></div><span class="card-actions">${isOwner ? `<button class="remove-map-spot remove-collab-button" data-user-id="${member.id}" type="button">移除</button>` : ""}</span></div>`).join("") : '<p class="field-note">还没有协作者。添加后，对方能在自己的「我的私人地图」里看到这张地图并一起编辑。</p>') +
+    (isOwner ? '<div class="collab-add"><input id="collabUsernameInput" type="text" placeholder="输入对方的用户名（或昵称）" maxlength="40"><button class="text-button" id="addCollabButton" type="button">添加协作者 +</button></div><div id="collabCandidates" class="collab-candidates"></div>' : "");
+  section.querySelectorAll(".remove-collab-button").forEach((button) => button.addEventListener("click", async () => {
+    const response2 = await apiFetch(`${API_BASE}/maps/${mapId}/collaborators/${button.dataset.userId}`, { method: "DELETE", headers: authHeaders() });
+    if (!response2 || !response2.ok) { showToast("移除失败，请稍后重试"); return; }
+    showToast("已移除协作者");
+    await renderCollabSection(section, mapId);
+  }));
+  const addButton = section.querySelector("#addCollabButton");
+  if (addButton) addButton.addEventListener("click", async () => {
+    const input = section.querySelector("#collabUsernameInput");
+    const username = input.value.trim();
+    if (username.length < 2) { showToast("请输入对方的用户名"); return; }
+    const response2 = await apiFetch(`${API_BASE}/maps/${mapId}/collaborators`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ username }) });
+    const payload2 = await response2.json().catch(() => ({}));
+    if (!response2 || !response2.ok) {
+      // 昵称撞名：展示候选列表让主人选择具体用户
+      if (payload2.candidates?.length) { renderCandidatePicker(section, mapId, payload2.candidates); return; }
+      showToast(payload2.error || "添加失败");
+      return;
+    }
+    showToast(payload2.added ? `已添加 ${payload2.user.nickname || payload2.user.username} 为协作者` : "该用户已经是协作者");
+    input.value = "";
+    await renderCollabSection(section, mapId);
+  });
+}
+
+// 昵称重名时的候选选择：选中后按 user_id 精确添加
+function renderCandidatePicker(section, mapId, candidates) {
+  const box = section.querySelector("#collabCandidates");
+  if (!box) return;
+  box.innerHTML = '<p class="field-note">以下用户昵称相同，请选择要添加的人：</p>' +
+    candidates.map((candidate) => `<label class="map-pick-option"><input type="radio" name="collab-candidate" value="${candidate.id}"><span>${escapeHTML(candidate.nickname || candidate.username)}</span><small>@${escapeHTML(candidate.username)}</small></label>`).join("") +
+    '<button class="text-button" id="confirmCandidateButton" type="button">添加选中的用户 →</button>';
+  const first = box.querySelector('input[name="collab-candidate"]');
+  if (first) first.checked = true;
+  box.querySelector("#confirmCandidateButton").addEventListener("click", async () => {
+    const selected = box.querySelector('input[name="collab-candidate"]:checked');
+    if (!selected) return;
+    const response2 = await apiFetch(`${API_BASE}/maps/${mapId}/collaborators`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ user_id: Number(selected.value) }) });
+    const payload2 = await response2.json().catch(() => ({}));
+    if (!response2 || !response2.ok) { showToast(payload2.error || "添加失败"); return; }
+    showToast(payload2.added ? `已添加 ${payload2.user.nickname || payload2.user.username} 为协作者` : "该用户已经是协作者");
+    await renderCollabSection(section, mapId);
+  });
+}
+
+/* ---------------- 应急地图：附近救援设施 + 一键求助（纯前端，联系人只存本机浏览器） ---------------- */
+const EMERGENCY_CATEGORIES = [
+  { key: "police", icon: "🚓", label: "警察局", keywords: "派出所|公安局", color: "#2F80ED" },
+  { key: "hospital", icon: "🏥", label: "医院", keywords: "医院|卫生院", color: "#E53E3E" },
+  { key: "fire", icon: "🚒", label: "消防", keywords: "消防", color: "#DD6B20" },
+  { key: "shelter", icon: "🏕", label: "避难所", keywords: "应急避难所|避难场所", color: "#38A169" }
+];
+const EMERGENCY_CONTACTS_KEY = "qingyuan-emergency-contacts";
+const emergencyBackdrop = document.querySelector("#emergencyBackdrop");
+const emergencyButton = document.querySelector("#emergencyButton");
+let emergencyCenter = null;
+const emergencyMarkers = [];
+
+function emergencyContacts() {
+  try { return JSON.parse(localStorage.getItem(EMERGENCY_CONTACTS_KEY)) || []; } catch { return []; }
+}
+
+function sosText() {
+  const time = new Date().toLocaleString("zh-CN");
+  if (!emergencyCenter) return `【紧急求助】我需要帮助！定位暂不可用，请直接拨打我的电话。发送时间：${time}`;
+  const url = `https://uri.amap.com/marker?position=${emergencyCenter.lng},${emergencyCenter.lat}&name=${encodeURIComponent("我的位置")}`;
+  const accuracy = emergencyCenter.accuracy ? `（误差约 ${Math.round(emergencyCenter.accuracy)} 米）` : "";
+  return `【紧急求助】我需要帮助！我的位置：${url}${accuracy} 发送时间：${time}`;
+}
+
+function updateSosText() {
+  const box = document.querySelector("#sosText");
+  if (box) box.value = sosText();
+}
+
+function locateForEmergency() {
+  const status = document.querySelector("#emergencyLocateStatus");
+  updateSosText();
+  const useMapCenter = () => {
+    if (typeof map === "undefined" || !map) return;
+    const center = map.getCenter();
+    emergencyCenter = { lng: center.lng, lat: center.lat, accuracy: 0 };
+    updateSosText();
+  };
+  if (!navigator.geolocation) { status.textContent = "浏览器不支持定位，已用地图中心代替。"; useMapCenter(); return; }
+  navigator.geolocation.getCurrentPosition((position) => {
+    emergencyCenter = { lng: position.coords.longitude, lat: position.coords.latitude, accuracy: position.coords.accuracy };
+    status.textContent = `已定位（误差约 ${Math.round(position.coords.accuracy)} 米）`;
+    updateSosText();
+  }, () => {
+    status.textContent = "定位失败（可能被浏览器拦截），已用地图中心代替。";
+    useMapCenter();
+  }, { enableHighAccuracy: true, timeout: 8000 });
+}
+
+function renderEmergencyContacts() {
+  const list = document.querySelector("#contactList");
+  if (!list) return;
+  const contacts = emergencyContacts();
+  list.innerHTML = contacts.length ? contacts.map((contact, index) => `<div class="private-map-spot"><div class="private-map-spot-info"><strong>${escapeHTML(contact.name)}</strong><span>${escapeHTML(contact.phone)}</span></div><span class="card-actions"><a class="text-button" href="tel:${escapeHTML(contact.phone)}">📞 电话</a><button class="text-button sms-contact-button" data-phone="${escapeHTML(contact.phone)}" type="button">✉️ 发定位短信</button><button class="remove-map-spot" data-index="${index}" type="button">移除</button></span></div>`).join("") : '<p class="field-note">还没有紧急联系人。联系人只保存在这台设备的浏览器里，不会上传。</p>';
+  list.querySelectorAll(".remove-map-spot").forEach((button) => button.addEventListener("click", () => {
+    const contacts = emergencyContacts();
+    contacts.splice(Number(button.dataset.index), 1);
+    localStorage.setItem(EMERGENCY_CONTACTS_KEY, JSON.stringify(contacts));
+    renderEmergencyContacts();
+  }));
+  list.querySelectorAll(".sms-contact-button").forEach((button) => button.addEventListener("click", () => {
+    location.href = `sms:${button.dataset.phone}?body=${encodeURIComponent(sosText())}`;
+  }));
+}
+
+function clearEmergencyMarkers() {
+  if (typeof map !== "undefined" && map) emergencyMarkers.forEach((marker) => map.remove(marker));
+  emergencyMarkers.length = 0;
+}
+
+function searchEmergencyFacilities(key) {
+  const category = EMERGENCY_CATEGORIES.find((item) => item.key === key);
+  const results = document.querySelector("#emergencyResults");
+  if (!category || !results) return;
+  if (!emergencyCenter) { showToast("还在定位中，等状态栏显示已定位后再试"); return; }
+  if (typeof AMap === "undefined" || !AMap.PlaceSearch) { showToast("地图服务未加载，请刷新页面"); return; }
+  results.innerHTML = '<span class="field-note">搜索中……</span>';
+  const search = new AMap.PlaceSearch({ pageSize: 10, extensions: "base" });
+  search.searchNearBy(category.keywords, [emergencyCenter.lng, emergencyCenter.lat], 3000, (status, result) => {
+    const pois = status === "complete" && result.poiList ? result.poiList.pois || [] : [];
+    if (!pois.length) { results.innerHTML = '<p class="field-note">附近 3 公里内没有找到，可以换个分类，或直接用下面的快捷拨号。</p>'; return; }
+    clearEmergencyMarkers();
+    results.innerHTML = pois.map((poi) => {
+      const address = typeof poi.address === "string" ? poi.address : "";
+      const distance = poi.distance ? ` · 约 ${Math.round(poi.distance)} 米` : "";
+      const link = `https://uri.amap.com/navigation?to=${poi.location.lng},${poi.location.lat},${encodeURIComponent(poi.name)}&mode=car&src=qymap-emergency`;
+      return `<div class="private-map-spot"><div class="private-map-spot-info"><strong>${category.icon} ${escapeHTML(poi.name)}</strong><span>${escapeHTML(address)}${distance}</span></div><span class="card-actions"><a class="text-button navigate-link" href="${link}" target="_blank" rel="noopener">导航 →</a></span></div>`;
+    }).join("");
+    pois.forEach((poi) => {
+      const marker = new AMap.Marker({
+        position: [poi.location.lng, poi.location.lat],
+        content: `<div class="marker-pin" style="--marker-color:${category.color}">${category.icon}</div>`,
+        offset: new AMap.Pixel(-13, -40),
+        title: poi.name
+      });
+      map.add(marker);
+      emergencyMarkers.push(marker);
+    });
+    map.setFitView(emergencyMarkers, false, [60, 60, 60, 60]);
+    document.querySelector(".map-panel").scrollIntoView({ behavior: "smooth" });
+  });
+}
+
+emergencyButton.addEventListener("click", () => {
+  emergencyBackdrop.hidden = false;
+  renderEmergencyContacts();
+  locateForEmergency();
+});
+document.querySelector("#closeEmergencyButton").addEventListener("click", () => {
+  emergencyBackdrop.hidden = true;
+  clearEmergencyMarkers();
+});
+document.querySelectorAll(".emergency-categories button").forEach((button) => button.addEventListener("click", () => searchEmergencyFacilities(button.dataset.ekey)));
+document.querySelector("#copySosButton").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(sosText()); showToast("求救信息已复制，粘贴发给家人朋友即可"); }
+  catch { window.prompt("复制下面的求救信息", sosText()); }
+});
+document.querySelector("#addContactButton").addEventListener("click", () => {
+  const nameInput = document.querySelector("#contactName");
+  const phoneInput = document.querySelector("#contactPhone");
+  const name = nameInput.value.trim();
+  const phone = phoneInput.value.trim();
+  if (name.length < 1) { showToast("请填写联系人称呼"); return; }
+  if (!/^[+\d][\d\-]{4,14}$/.test(phone)) { showToast("请填写正确的手机号"); return; }
+  const contacts = emergencyContacts();
+  if (contacts.some((contact) => contact.phone === phone)) { showToast("这个号码已经添加过了"); return; }
+  contacts.push({ name, phone });
+  localStorage.setItem(EMERGENCY_CONTACTS_KEY, JSON.stringify(contacts));
+  nameInput.value = "";
+  phoneInput.value = "";
+  renderEmergencyContacts();
+  showToast("已添加紧急联系人");
+});
+
+/* ---------------- 回收站：最近删除的地图可恢复或彻底删除 ---------------- */
+const trashToggleButton = document.querySelector("#trashToggleButton");
+
+async function refreshTrashView() {
+  const detail = document.querySelector("#privateMapDetail");
+  detail.hidden = false;
+  detail.innerHTML = '<span class="field-note">加载中……</span>';
+  const response = await apiFetch(`${API_BASE}/maps/trash`, { headers: authHeaders() });
+  const payload = await response.json().catch(() => ({}));
+  if (!response || !response.ok) { detail.innerHTML = `<span class="field-note">${escapeHTML(payload.error || "加载失败，请稍后重试")}</span>`; return; }
+  const rows = payload.data || [];
+  if (!rows.length) { detail.innerHTML = '<p class="field-note">回收站是空的。删除的地图会在这里保留 30 天。</p>'; return; }
+  detail.innerHTML = '<p class="private-map-detail-title"><span>最近删除（保留 30 天，过期自动清除）</span></p>' + rows.map((row) => `<div class="private-map-spot"><div class="private-map-spot-info"><strong>${escapeHTML(row.name)}</strong><span>${row.spot_count || 0} 个点位 · 删除于 ${escapeHTML(String(row.deleted_at || "").slice(0, 10))}</span></div><span class="card-actions"><button class="text-button restore-map-button" data-map-id="${row.id}" type="button">恢复</button><button class="remove-map-spot purge-map-button" data-map-id="${row.id}" type="button">彻底删除</button></span></div>`).join("");
+  detail.querySelectorAll(".restore-map-button").forEach((button) => button.addEventListener("click", async () => {
+    const response2 = await apiFetch(`${API_BASE}/maps/${button.dataset.mapId}/restore`, { method: "POST", headers: authHeaders() });
+    const payload2 = await response2.json().catch(() => ({}));
+    if (!response2 || !response2.ok) { showToast(payload2.error || "恢复失败"); return; }
+    showToast("已恢复");
+    await loadMaps();
+    await refreshTrashView();
+  }));
+  detail.querySelectorAll(".purge-map-button").forEach((button) => button.addEventListener("click", async () => {
+    if (!window.confirm("彻底删除后无法恢复，确定吗？")) return;
+    const response2 = await apiFetch(`${API_BASE}/maps/${button.dataset.mapId}?permanent=1`, { method: "DELETE", headers: authHeaders() });
+    if (!response2 || !response2.ok) { showToast("删除失败，请稍后重试"); return; }
+    showToast("已彻底删除");
+    await refreshTrashView();
+  }));
+}
+
+trashToggleButton.addEventListener("click", () => {
+  const detail = document.querySelector("#privateMapDetail");
+  if (trashToggleButton.classList.contains("active")) {
+    trashToggleButton.classList.remove("active");
+    detail.hidden = true;
+    detail.innerHTML = "";
+    return;
+  }
+  trashToggleButton.classList.add("active");
+  state.openMapId = null;
+  renderPrivateMaps();
+  refreshTrashView();
+});
+
+function highlightMapSpots(mapId) {
+  const mapItem = state.myMaps.find((m) => m.id === mapId);
+  const ids = new Set((mapItem?.spot_ids || []).map(String));
+  if (!ids.size) { showToast("这张地图还没有点位"); return; }
+  // 与 AI 推荐高亮同一机制：主地图只高亮不画线
+  state.highlightIds = ids;
+  renderMarkers();
+  const source = state.myOnly ? state.spots : state.mapSpots;
+  const targets = source.filter((spot) => ids.has(String(spot.id)) && spot.locationVerified !== false);
+  if (!targets.length) { showToast("地图数据尚未同步，稍后再试"); return; }
+  if (targets.length === 1) {
+    map.setZoomAndCenter(16, [targets[0].lng, targets[0].lat]);
+  } else {
+    const lngs = targets.map((spot) => spot.lng);
+    const lats = targets.map((spot) => spot.lat);
+    map.setBounds(new AMap.Bounds(new AMap.LngLat(Math.min(...lngs), Math.min(...lats)), new AMap.LngLat(Math.max(...lngs), Math.max(...lats))));
+  }
+  document.querySelector(".map-panel").scrollIntoView({ behavior: "smooth" });
+  showToast(`已在主地图高亮 ${targets.length} 个收藏点位`);
 }
 
 document.querySelector("#authButton").addEventListener("click", async () => {
   if (!state.currentUser) { openAuth(); return; }
-  await apiFetch(`${API_BASE}/auth/logout`, { method: "POST", headers: authHeaders() }); localStorage.removeItem(AUTH_TOKEN_KEY); state.currentUser = null; updateAuthUI(); showToast("已退出登录");
+  await apiFetch(`${API_BASE}/auth/logout`, { method: "POST", headers: authHeaders() }); localStorage.removeItem(AUTH_TOKEN_KEY); state.currentUser = null; state.myMaps = []; state.savedMapName = {}; state.openMapId = null; renderPrivateMaps(); trashToggleButton.classList.remove("active"); document.querySelector("#privateMapDetail").hidden = true; updateAuthUI(); showToast("已退出登录");
 });
 document.querySelector("#closeAuthButton").addEventListener("click", () => { authBackdrop.hidden = true; });
 document.querySelector("#authSwitchButton").addEventListener("click", () => {
@@ -1196,7 +1614,24 @@ document.querySelector("#authForm").addEventListener("submit", async (event) => 
   const message = document.querySelector("#authMessage"); message.textContent = "处理中……";
   try { const response = await apiFetch(`${API_BASE}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: data.username, password: data.password }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "请求失败"); localStorage.setItem(AUTH_TOKEN_KEY, payload.token); state.currentUser = payload.user; authBackdrop.hidden = true; updateAuthUI(); if (payload.mustChangePassword) { location.href = location.pathname + "?forceChange=1"; return; } await loadMaps(); showToast(`欢迎，${payload.user.nickname || payload.user.username}`); } catch (error) { message.textContent = error.message; }
 });
-document.querySelector("#mapForm").addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget; const name = new FormData(form).get("name"); try { const response = await fetch(`${API_BASE}/maps`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ name }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); form.reset(); await loadMaps(); showToast(`私人地图“${payload.name}”已创建`); } catch (error) { showToast(error.message || "创建失败"); } });
+document.querySelector("#mapForm").addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget; const name = new FormData(form).get("name"); try { const response = await apiFetch(`${API_BASE}/maps`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ name }) }); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload.error || "创建失败"); form.reset(); await loadMaps(); showToast(`私人地图“${payload.name}”已创建`); } catch (error) { showToast(error.message || "创建失败"); } });
+// AI 生成私人地图：输入主题，模型从已上线点位中挑 2-8 个自动建图
+document.querySelector("#autoMapForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const theme = new FormData(form).get("theme");
+  const button = form.querySelector("button");
+  button.disabled = true; button.textContent = "AI 挑选中……";
+  try {
+    const response = await apiFetch(`${API_BASE}/maps/auto`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ theme }) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "生成失败");
+    form.reset();
+    await loadMaps();
+    showToast(`AI 已创建「${payload.name}」，挑了 ${payload.spot_ids?.length || 0} 个点位`);
+  } catch (error) { showToast(error.message || "生成失败"); }
+  finally { button.disabled = false; button.textContent = "AI 挑地点建图 ✦"; }
+});
 render();
 loadPublicSpots();
 checkLogin();

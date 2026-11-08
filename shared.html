@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="清远社区地图 · 只读分享的私人地点清单">
+  <title>分享的私人地图 · 清远社区地图</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style.css?v=20261107-17">
+  <style>
+    /* 只读分享页独立布局，不使用首页的 app-shell 网格 */
+    body { min-height: 100vh; }
+    .shared-page { max-width: 760px; margin: 0 auto; padding: 42px 24px 60px; }
+    .shared-page h1 { margin: 6px 0 8px; font-family: "Noto Serif SC", serif; font-size: 30px; }
+    .shared-desc { margin: 0 0 22px; color: var(--muted); font-size: 13px; }
+    #sharedMapContainer { height: 380px; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 22px; background: #dfe8df; }
+    .shared-spot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); background: var(--panel); margin-bottom: 8px; }
+    .shared-spot-info { display: grid; gap: 3px; min-width: 0; }
+    .shared-spot-info strong { font-size: 14px; overflow-wrap: anywhere; }
+    .shared-spot-info span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    .shared-meta { color: var(--muted); font-size: 11px; margin-top: 30px; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/index.html">
+      <span class="brand-mark">清</span>
+      <span><strong>清远 · 社区共享地图</strong><small>SHARED MAP / 只读分享</small></span>
+    </a>
+  </header>
+  <main class="shared-page">
+    <p class="eyebrow">PRIVATE MAP · READ ONLY</p>
+    <h1 id="mapName">加载中……</h1>
+    <p class="shared-desc" id="mapDesc"></p>
+    <div id="sharedMapContainer"></div>
+    <div id="spotList"></div>
+    <p class="shared-meta">此页面为只读视图，仅展示对方公开分享的地点清单，不包含任何个人信息。<a href="/index.html">我也想做一个 →</a></p>
+  </main>
+
+  <script>window._AMapSecurityConfig = { securityJsCode: "23bdb3356d33258cc84de4c5ec773e5a" };</script>
+  <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
+  <script src="demo-data.js?v=20261107-2"></script>
+  <script>
+    (function () {
+      const token = new URLSearchParams(location.search).get("t") || "";
+      const nameEl = document.querySelector("#mapName");
+      const descEl = document.querySelector("#mapDesc");
+      const listEl = document.querySelector("#spotList");
+      if (!/^[a-f0-9]{16,64}$/.test(token)) { nameEl.textContent = "分享链接无效"; return; }
+      function escapeHTML(value) { return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])); }
+      function navigationURL(spot) { return "https://uri.amap.com/navigation?to=" + spot.lng + "," + spot.lat + "," + encodeURIComponent(spot.name) + "&mode=car&src=qymap-share"; }
+      // 先请求真实后端；本地静态预览（返回 404 网页、JSON 解析失败）时退回演示数据
+      async function loadPayload() {
+        let response, payload;
+        try {
+          response = await fetch("/api/shared/" + token);
+          payload = await response.json();
+        } catch {
+          if (!window.QYDemo) throw new Error("分享服务不可用，请稍后再试");
+          response = await window.QYDemo.handle("/api/shared/" + token, { method: "GET" });
+          payload = await response.json();
+        }
+        if (!response.ok) throw new Error((payload && payload.error) || "加载失败");
+        return payload;
+      }
+      loadPayload()
+        .then((payload) => {
+          nameEl.textContent = payload.map.name || "未命名地图";
+          descEl.textContent = payload.map.description || "";
+          const spots = payload.spots || [];
+          if (!spots.length) { listEl.innerHTML = '<p class="field-note">这张地图还没有点位。</p>'; return; }
+          listEl.innerHTML = spots.map((spot, index) => '<div class="shared-spot"><div class="shared-spot-info"><strong>' + (index + 1) + '. ' + escapeHTML(spot.name) + '</strong><span>' + escapeHTML(spot.address || "") + '</span></div><a class="text-button navigate-link" href="' + navigationURL(spot) + '" target="_blank" rel="noopener">导航 →</a></div>').join("");
+          // 有坐标时渲染只读地图；无坐标（老数据）只显示清单
+          const located = spots.filter((spot) => Number.isFinite(spot.lat) && Number.isFinite(spot.lng));
+          if (!located.length || typeof AMap === "undefined") return;
+          const map = new AMap.Map("sharedMapContainer", { zoom: 12, center: [located[0].lng, located[0].lat], viewMode: "2D", mapStyle: "amap://styles/normal", useNativeMap: true });
+          located.forEach((spot, index) => {
+            map.add(new AMap.Marker({
+              position: [spot.lng, spot.lat],
+              content: '<div class="route-badge">' + (index + 1) + '</div>',
+              offset: new AMap.Pixel(-13, -40),
+              title: spot.name
+            }));
+          });
+          map.setFitView(null, false, [40, 40, 40, 40]);
+        })
+        .catch((error) => { nameEl.textContent = "加载失败"; descEl.textContent = error.message || "请稍后再试"; });
+    })();
+  </script>
+</body>
+</html>
