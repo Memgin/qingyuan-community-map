@@ -5,6 +5,9 @@ const reportList = document.querySelector("#reportList");
 const allSpotsList = document.querySelector("#allSpotsList");
 const spotSearchInput = document.querySelector("#spotSearch");
 const statusFilter = document.querySelector("#statusFilter");
+const categoryFilter = document.querySelector("#categoryFilter");
+// 管理列表里分类 key 显示为中文
+const CATEGORY_LABELS = { scenic: "景点", food: "美食", shopping: "商圈", medical: "医疗", school: "学校", transit: "车站" };
 const message = document.querySelector("#adminMessage");
 const STATUS_LABELS = { pending: "待审核", approved: "已上线", rejected: "已下架" };
 
@@ -161,8 +164,9 @@ async function loadAllSpots() {
     const params = new URLSearchParams();
     if (spotSearchInput.value.trim()) params.set("q", spotSearchInput.value.trim());
     if (statusFilter.value) params.set("status", statusFilter.value);
+    if (categoryFilter.value) params.set("category", categoryFilter.value);
     const payload = await request(`/admin/spots/all?${params}`);
-    allSpotsList.innerHTML = payload.data.length ? payload.data.map((spot) => `<article class="admin-card"><div><h2>${escapeHTML(spot.name)}<small>${escapeHTML(STATUS_LABELS[spot.status] || spot.status)}</small></h2><p>${escapeHTML(spot.address || spot.description)} · ${escapeHTML(spot.category)} · ${spot.likes} 赞 · ${escapeHTML(spot.created_at)}</p></div><div class="admin-actions"><button class="delete" data-delete-id="${spot.id}" type="button">删除</button></div></article>`).join("") : "<p>没有找到匹配的地点。</p>";
+    allSpotsList.innerHTML = payload.data.length ? payload.data.map((spot) => `<article class="admin-card"><div><h2>${escapeHTML(spot.name)}<small>${escapeHTML(STATUS_LABELS[spot.status] || spot.status)}</small></h2><p>${escapeHTML(spot.address || spot.description)} · ${escapeHTML(CATEGORY_LABELS[spot.category] || spot.category)} · ${spot.likes} 赞 · ${escapeHTML(spot.created_at)}</p></div><div class="admin-actions"><button class="delete" data-delete-id="${spot.id}" type="button">删除</button></div></article>`).join("") : "<p>没有找到匹配的地点。</p>";
     allSpotsList.querySelectorAll("button[data-delete-id]").forEach((button) => button.addEventListener("click", () => deleteSpot(button.dataset.deleteId)));
   } catch (error) { message.textContent = error.message; }
 }
@@ -188,3 +192,5 @@ document.querySelector("#amapCheckButton").addEventListener("click", async () =>
 });
 document.querySelector("#loadSpotsButton").addEventListener("click", loadAllSpots);
 spotSearchInput.addEventListener("keydown", (event) => { if (event.key === "Enter") loadAllSpots(); });
+categoryFilter.addEventListener("change", loadAllSpots);
+statusFilter.addEventListener("change", loadAllSpots);

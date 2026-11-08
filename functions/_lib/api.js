@@ -1036,9 +1036,11 @@ async function listAdminSpots(request, url, env) {
   if (!authorized(request, env)) return json({ error: "未授权" }, 401, env);
   const status = url.searchParams.get("status");
   const query = url.searchParams.get("q");
+  const category = url.searchParams.get("category");
   const conditions = [];
   const bindings = [];
   if (STATUSES.has(status)) { conditions.push("status = ?"); bindings.push(status); }
+  if (CATEGORIES.has(category)) { conditions.push("category = ?"); bindings.push(category); }
   if (query) { conditions.push("(name LIKE ? OR address LIKE ?)"); bindings.push(`%${query}%`, `%${query}%`); }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const rows = await env.DB.prepare(`SELECT id, name, address, category, description, lat, lng, status, likes, created_at FROM spots ${where} ORDER BY created_at DESC LIMIT 100`).bind(...bindings).all();

@@ -63,7 +63,7 @@
     <section class="admin-panel" id="panel-spots" hidden>
       <h2>全部点位管理</h2>
       <p class="panel-desc">按名称、地址或状态筛选所有点位，可下架违规内容。</p>
-      <div class="panel-tools"><input id="spotSearch" type="text" placeholder="按名称或地址搜索，留空显示全部"><select id="statusFilter"><option value="">全部状态</option><option value="approved">已上线</option><option value="pending">待审核</option><option value="rejected">已下架</option></select><button class="primary-button" id="loadSpotsButton" type="button">加载点位</button></div>
+      <div class="panel-tools"><input id="spotSearch" type="text" placeholder="按名称或地址搜索，留空显示全部"><select id="categoryFilter"><option value="">全部分类</option><option value="scenic">景点</option><option value="food">美食</option><option value="shopping">商圈</option><option value="medical">医疗</option><option value="school">学校</option><option value="transit">车站</option></select><select id="statusFilter"><option value="">全部状态</option><option value="approved">已上线</option><option value="pending">待审核</option><option value="rejected">已下架</option></select><button class="primary-button" id="loadSpotsButton" type="button">加载点位</button></div>
       <section id="allSpotsList"></section>
     </section>
 
@@ -99,6 +99,6 @@
     </section>
   </main>
   <div class="toast" id="adminToast"></div>
-  <script src="admin.js?v=20261025-9"></script>
+  <script src="admin.js?v=20261108-1"></script>
 </body>
 </html>
