@@ -212,7 +212,7 @@ async function uploadImage(request, env) {
   const contentType = request.headers.get("Content-Type") || "";
   if (!/^image\/(jpeg|png|webp)$/.test(contentType)) return json({ error: "仅支持 JPG、PNG、WebP 图片" }, 400, env);
   const body = await request.arrayBuffer();
-  if (body.byteLength > 2 * 1024 * 1024) return json({ error: "图片不能超过 2MB" }, 400, env);
+  if (body.byteLength > 20 * 1024 * 1024) return json({ error: "单张图片不能超过 20MB" }, 400, env);
   // 二次校验：文件头必须与声明的类型一致，否则拒绝
   if (sniffImageType(new Uint8Array(body.slice(0, 12))) !== contentType) return json({ error: "文件内容与声明的图片格式不一致，请重新上传" }, 400, env);
   if (!await reserveProjectUsage(env, body.byteLength, 1, 0)) return json({ error: "项目图片存储或写入总额度已达到上限" }, 429, env);

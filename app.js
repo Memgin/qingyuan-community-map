@@ -893,8 +893,10 @@ document.querySelector("#spotForm").addEventListener("submit", async (event) => 
   const originalHTML = submitButton.innerHTML;
   const formMessage = document.querySelector("#formMessage");
   const formData = new FormData(form);
-  const image = formData.get("image");
-  if (image && image.size > 2 * 1024 * 1024) { formMessage.textContent = "图片不能超过 2MB。"; return; }
+  // 多图上传：第一张作封面（image_url），其余在点位创建成功后追加进照片墙；
+  // 总共 ≤20MB、最多 10 张（与照片墙"单人单地点 9 张"上限对齐）
+  const imageFiles = [...(form.querySelector('input[name="image"]').files || [])].slice(0, 10);
+  if (imageFiles.reduce((sum, file) => sum + file.size, 0) > 20 * 1024 * 1024) { formMessage.textContent = "图片总共不能超过 20MB。"; return; }
   // client_token 用于离线重发的幂等：同一条提交重复发送只会被写入一次
   const spot = { id: Date.now(), name: formData.get("name").trim(), address: formData.get("address").trim(), category: formData.get("category"), description: formData.get("description").trim(), lat: Number(formData.get("lat")), lng: Number(formData.get("lng")), image_url: "", status: "pending", client_token: crypto.randomUUID() };
   if (!Number.isFinite(spot.lat) || !Number.isFinite(spot.lng) || spot.lat < 23.4 || spot.lat > 24.8 || spot.lng < 112.4 || spot.lng > 113.8) { formMessage.textContent = "请先搜索清远的地址或地点。"; return; }
@@ -910,10 +912,22 @@ document.querySelector("#spotForm").addEventListener("submit", async (event) => 
   submitButton.disabled = true;
   submitButton.textContent = "提交中…";
   let imageURL = "";
-  if (image && image.size) {
-    const uploadResponse = await fetch(`${API_BASE}/uploads`, { method: "POST", headers: authHeaders({ "Content-Type": image.type }), body: image }).catch(() => null);
-    if (!uploadResponse || !uploadResponse.ok) { formMessage.textContent = "图片上传失败，请重试或先不添加图片。"; restoreButton(); return; }
-    imageURL = (await uploadResponse.json()).url;
+  const extraPhotoUrls = [];
+  if (imageFiles.length) {
+    for (let i = 0; i < imageFiles.length; i++) {
+      submitButton.textContent = `上传图片 ${i + 1}/${imageFiles.length}…`;
+      const uploadResponse = await fetch(`${API_BASE}/uploads`, { method: "POST", headers: authHeaders({ "Content-Type": imageFiles[i].type }), body: imageFiles[i] }).catch(() => null);
+      if (!uploadResponse || !uploadResponse.ok) {
+        const errPayload = uploadResponse ? await uploadResponse.json().catch(() => ({})) : {};
+        // 一张失败不拖垮整单：已有封面时跳过该张继续；连封面都没有才中止提交
+        if (!imageURL) { formMessage.textContent = errPayload.error || "图片上传失败，请重试或先不添加图片。"; restoreButton(); return; }
+        formMessage.textContent = `第 ${i + 1} 张上传失败，将使用其余 ${i} 张继续提交。`;
+        break;
+      }
+      const url = (await uploadResponse.json()).url;
+      if (!imageURL) imageURL = url; else extraPhotoUrls.push(url);
+    }
+    submitButton.textContent = "提交中…";
   }
   spot.image_url = imageURL;
   try {
@@ -925,7 +939,13 @@ document.querySelector("#spotForm").addEventListener("submit", async (event) => 
       if (response.status >= 500) { const items = getOutbox(); items.push({ spot, at: Date.now() }); setOutbox(items); }
       formMessage.textContent = payload.error || "提交失败，请稍后重试。"; restoreButton(); return;
     }
-    if (payload.id) trackOwnSubmission(payload.id);
+    if (payload.id) {
+      trackOwnSubmission(payload.id);
+      // 剩余图片追加进照片墙（单张失败静默跳过，之后还可用「补图」继续添加）
+      for (const url of extraPhotoUrls) {
+        await fetch(`${API_BASE}/spots/${payload.id}/photos`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ url }) }).catch(() => null);
+      }
+    }
     done(payload.verified ? "地址已由高德核验，自动通过。" : (payload.autocheck ? `${payload.autocheck}。` : "提交成功，等待审核。"), false);
   } catch {
     const items = getOutbox(); items.push({ spot, at: Date.now() }); setOutbox(items);
@@ -980,7 +1000,7 @@ document.querySelector("#addWallPhotoButton").addEventListener("click", async ()
   if (!editingSpotId) return;
   const file = document.querySelector("#editWallImage").files[0];
   if (!file) { showToast("请先选择一张照片"); return; }
-  if (file.size > 2 * 1024 * 1024) { showToast("图片不能超过 2MB"); return; }
+  if (file.size > 20 * 1024 * 1024) { showToast("单张图片不能超过 20MB"); return; }
   const button = document.querySelector("#addWallPhotoButton");
   button.disabled = true; button.textContent = "上传中…";
   try {
@@ -1012,7 +1032,7 @@ document.querySelector("#editForm").addEventListener("submit", async (event) => 
     const body = { category: document.querySelector("#editCategory").value };
     const file = document.querySelector("#editImage").files[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) throw new Error("图片不能超过 2MB。");
+      if (file.size > 20 * 1024 * 1024) throw new Error("单张图片不能超过 20MB。");
       const uploadResponse = await fetch(`${API_BASE}/uploads`, { method: "POST", headers: authHeaders({ "Content-Type": file.type }), body: file });
       const uploadPayload = await uploadResponse.json().catch(() => ({}));
       if (!uploadResponse.ok) throw new Error(uploadPayload.error || "图片上传失败");

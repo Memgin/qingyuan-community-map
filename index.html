@@ -98,7 +98,7 @@
         <p id="addressMessage" class="form-message" role="status"></p>
         <label>地点分类<select name="category" required><option value="scenic">景点</option><option value="food">美食</option><option value="shopping">商圈</option><option value="medical">医疗</option><option value="school">学校</option><option value="transit">车站</option></select></label>
         <label>一句话介绍<textarea name="description" rows="3" maxlength="120" placeholder="说说这里为什么值得来……" required></textarea></label>
-        <label>地点图片<input name="image" type="file" accept="image/jpeg,image/png,image/webp"><small class="field-note">可选，最大 2MB</small></label>
+        <label>地点图片<input name="image" type="file" accept="image/jpeg,image/png,image/webp" multiple><small class="field-note">可选，最多 10 张、总共最大 20MB；第一张将作为封面</small></label>
         <input name="lat" type="hidden" value=""><input name="lng" type="hidden" value="">
         <button class="map-pick-note" id="pickLocationButton" type="button">⌖ 在地图上选择坐标</button>
         <button class="primary-button full-width" type="submit">提交，加入社区地图 <span>→</span></button>
@@ -202,6 +202,6 @@
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
   <script src="demo-data.js?v=20261102-1"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/simple-liquid-glass@5.6.0/dist/web-component.esm.js"></script>
-  <script src="app.js?v=20261102-35"></script>
+  <script src="app.js?v=20261102-36"></script>
 </body>
 </html>
