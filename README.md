@@ -27,10 +27,18 @@
 
 ### 互动
 - **点赞 / 举报**：登录用户按账号记录，网页端与 App 状态一致
-- **私人地图收藏**：把喜欢的点位收进自己的地图
 - **我的提交**：查看自己提交的点位及其审核状态
 - **位置纠偏**：发现点位坐标偏了？登录后在地图弹窗点「位置纠偏」，把蓝色标记拖到正确位置提交，管理员确认后全端生效
 - **社区照片墙**：图钉弹窗内展示社区成员补充的照片，任何登录用户可「补图」
+
+### 私人地图
+- **多地图 + 收藏选择器**：创建多张主题地图；收藏时多图弹出选择器（可当场新建），重复收藏有提示，卡片显示「已收藏 ✓」
+- **地图详情**：点地图名展开——名称输入框就地改名、点位清单（主地图高亮 / 移除）、**顺路规划**（收藏点位串成路线画在小地图）、删除
+- **回收站**：删除为软删除，保留 30 天可恢复 / 彻底删除，过期自动清理
+- **多人协作**：主人按用户名 / 昵称添加协作者（昵称撞名出候选列表），双方共同编辑；协作者不能删图 / 分享 / 管理成员
+- **只读分享**：生成 `shared.html?t=令牌` 只读链接（仅暴露地图名与点位，不含任何个人信息），可取消分享令牌立即失效
+- **AI 建图**：输入主题，AI 从已上线点位挑 2-8 个自动建私人地图（复用推荐的安全基线）
+- **应急地图**：🚨 一键定位搜索附近 3 公里的警察局 / 医院 / 消防 / 避难所（彩色标记 + 导航），求救信息带定位链接，可拨 110/120/119、给预设联系人发定位短信（联系人只存本机）
 
 ### 大众点评与评分
 - **评分展示**：列表卡片、地图弹窗、全部地点页均显示星级 + 均分 + 点评条数（列表接口子查询聚合，无二次请求）
@@ -61,6 +69,8 @@
 - 向导区下方内嵌**路线小地图**：推荐点位按最近邻贪心排序，蓝色虚线连成游览路线 + 序号标记（后续路线编辑的载体）
 - **季节推荐**：按当前月份把应季主题（春赏花 / 夏避暑 / 秋登高 / 冬食补）排最前并高亮，一键触发推荐
 - **结果缓存**：相同需求 + 相近视野（约 1km 精度）24 小时内直接复用缓存结果，不调模型、不计限流额度——热门问题零配额消耗
+- **推荐结果暂存**：推荐内容存入本地，**强制刷新后自动恢复**（文字 + 高亮 + 路线），主动清除才丢弃
+- **路线编辑器**：「✏️ 编辑路线」→ 左列编辑面板（↑↓ 调序 / 移除 / 添加点位）+ 右侧主地图大画布实时画橙色路线，保存后小地图同步
 - 接入智谱 `glm-4.7-flash`，主模型限流时自动降级到备用模型，25 秒超时保护
 
 ### 管理后台
@@ -73,6 +83,7 @@
 - **⑥ 诊断工具**：高德接口自检（不暴露 Key）
 
 ### 界面
+- **移动端重排**：手机动线 flex+order 布局——LOCAL/01 品牌区（压缩版）→ 详情 / 路线编辑面板（打开时贴地图上方）→ 大地图（62svh）→ 热门地点 → AI 向导 → 私人地图；季节按钮窄屏竖排每行一个
 - **液态玻璃**：顶栏接入 [simple-liquid-glass](https://github.com/lucaperullo/simple-liquid-glass)（CDN 锁定 5.6.0，Web Component 纯视觉层，`pointer-events: none` 不拦截交互，CDN 失败自动降级为半透明底色）
 - **地点卡片**：封面锚点（无图用分类色渐变占位）+ 评分元信息行 + 聚合互动行；次要操作（收藏/补图/编辑/举报/删除）收进「⋯」菜单
 
@@ -148,7 +159,7 @@ npx wrangler pages secret put PUSH_CLIENT_SECRET # 华为推送 Client Secret
 npx wrangler d1 execute qingyuan-community-map --remote --file=worker/schema.sql
 ```
 
-按 `worker/` 下的迁移脚本顺序依次执行（auth → owner → moderation → quotas → category-school …）。根目录迁移脚本按文件名时间顺序执行，最新一批：`migration-security.sql`（登录防护/会话）、`migration-registration.sql`（注册限额）、`migration-pwd-flow.sql`（密码重置申请与强制改密）、`migration-push.sql`（推送 Token）、`migration-photos.sql`（点位配图）、`migration-correction.sql`（位置纠偏）、`migration-reviews.sql`（大众点评与评分、用户昵称头像）、`migration-ai-cache.sql`（AI 推荐结果缓存）、`migration-nav-stats.sql`（导航点击统计）。
+按 `worker/` 下的迁移脚本顺序依次执行（auth → owner → moderation → quotas → category-school …）。最新一批：`migration-reviews.sql`（大众点评与评分、用户昵称头像）、`migration-ai-cache.sql`（AI 推荐结果缓存）、`migration-nav-stats.sql`（导航点击统计）、`worker/migration-share.sql`（私人地图分享令牌）、`worker/migration-trash.sql`（私人地图软删除）、`worker/migration-collab.sql`（私人地图协作表）。更早的：安全 / 注册 / 密码流程 / 推送 / 配图 / 纠偏等迁移见 `worker/` 与根目录。
 
 ### 4. 部署
 
@@ -195,7 +206,15 @@ npx wrangler pages deploy . --project-name qymap --branch main
 | --- | --- | --- |
 | POST | `/uploads` | 图片上传（二进制，返回 URL） |
 | GET | `/images/:key` | 读取图片 |
-| GET / POST | `/maps`、`/maps/:id/spots` | 私人地图收藏 |
+| GET / POST | `/maps`、`/maps/:id/spots` | 私人地图列表（含协作地图 + role）、创建、收藏 / 查看点位 |
+| DELETE | `/maps/:id/spots/:spotId` | 从地图移除点位（主人或协作者） |
+| PATCH | `/maps/:id` | 重命名地图（主人或协作者） |
+| DELETE | `/maps/:id` | 删除地图（默认软删除进回收站；`?permanent=1` 彻底删除） |
+| POST | `/maps/:id/restore`、GET `/maps/trash` | 回收站恢复 / 列表（30 天过期自动清理） |
+| POST / DELETE | `/maps/:id/share` | 生成 / 取消只读分享令牌（仅主人） |
+| GET | `/shared/:token` | 只读访问分享地图（公开，不含任何作者信息） |
+| POST | `/maps/auto` | AI 生成私人地图（主题 → 挑 2-8 个点位自动建图） |
+| GET / POST / DELETE | `/maps/:id/collaborators(/:userId)` | 协作成员管理（添加支持用户名 / 昵称消歧） |
 | POST | `/recommend` | AI 智能推荐 |
 | GET / PATCH | `/admin/spots`、`/admin/spots/:id/status` | 管理：待审核列表、审核 |
 | GET | `/admin/spots/all?status=&q=` | 管理：任意状态点位列表 |
@@ -221,7 +240,8 @@ npx wrangler pages deploy . --project-name qymap --branch main
 ├── register.html       独立注册页（Turnstile 与主页隔离）
 ├── recent.html         最近加入页（时间倒序 + 分类筛选）
 ├── all.html            全部地点页（网格浏览 + 评分入口）
-├── app.js              前端逻辑（地图、列表、点评、提交、同步）
+├── shared.html         私人地图只读分享页（按令牌访问）
+├── app.js              前端逻辑（地图、列表、点评、私人地图、路线编辑、提交、同步）
 ├── all.js              全部地点页 / 最近加入页共用逻辑
 ├── demo-data.js        本地演示数据兜底（仅 localhost 无后端时启用）
 ├── admin.html          管理后台页面
@@ -257,14 +277,16 @@ npx wrangler pages deploy . --project-name qymap --branch main
 | `鸿蒙期末项目可行性评估.md` | 将本项目改造为 HarmonyOS（DevEco Studio）应用的可行性评估与完整任务清单 |
 | `功能总结-点评与评分.md` | 地点评分 + 大众点评功能的实现细节、接口清单与验证记录 |
 | `修复记录-向导区地图不显示.md` | 向导区小地图空白问题的根因（flex 收缩）与修复过程 |
-| `aiguide-待完成功能.md` | AI 向导地图未完成功能清单（路线编辑、持久化等） |
+| `aiguide-待完成功能.md` | AI 向导地图功能清单（已完成 / 待实现，2026-11-08 更新） |
+| `新旧版本对比-私人地图改动记录-20261107.md` | 私人地图模块大改的功能清单、接口与安全设计 |
 
 ---
 
 ## 待办
 
 - AI 推荐体验优化：限流时的排队重试提示（热门问题缓存已完成）
-- 推荐路线编辑：在向导区小地图上拖拽排序 / 增删站点 / 指定起终点（`aiguide-待完成功能.md`）
 - AI 推荐结构化返回点位 id（替代当前的名称字符串匹配，消除漏匹配）
+- 推荐路线数据库持久化：暂存升级为「我的路线」（跨端同步，与私人地图协作 / 分享体系打通）
+- 路线序号 / 编辑清单点击联动主地图飞行定位与详情
 - HarmonyOS 客户端：找回密码申请入口、登录后 `mustChangePassword` 检测与强制改密页（与网页端对齐）
 - 推送通知的鸿蒙端点击跳转深链

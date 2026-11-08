@@ -17,3 +17,6 @@ qymap-harmony/
 npm-debug.log*
 .DS_Store
 Thumbs.db
+
+# 本地 UI 预览截图（iPhone 视口，仅供开发查看）
+预览-iPhone/
