@@ -186,8 +186,18 @@ async function loadAllSpots() {
     if (statusFilter.value) params.set("status", statusFilter.value);
     if (selectedCategory) params.set("category", selectedCategory);
     const payload = await request(`/admin/spots/all?${params}`);
-    allSpotsList.innerHTML = payload.data.length ? payload.data.map((spot) => `<article class="admin-card"><div><h2>${escapeHTML(spot.name)}<small>${escapeHTML(STATUS_LABELS[spot.status] || spot.status)}</small></h2><p>${escapeHTML(spot.address || spot.description)} · ${escapeHTML(CATEGORY_LABELS[spot.category] || spot.category)} · ${spot.likes} 赞 · ${escapeHTML(spot.created_at)}</p></div><div class="admin-actions"><button class="delete" data-delete-id="${spot.id}" type="button">删除</button></div></article>`).join("") : "<p>没有找到匹配的地点。</p>";
+    const categoryOptions = (spot) => ADMIN_CATEGORIES.filter((item) => item.key).map((item) => `<option value="${item.key}"${spot.category === item.key ? " selected" : ""}>${item.label}</option>`).join("");
+    allSpotsList.innerHTML = payload.data.length ? payload.data.map((spot) => `<article class="admin-card"><div><h2>${escapeHTML(spot.name)}<small>${escapeHTML(STATUS_LABELS[spot.status] || spot.status)}</small></h2><p>${escapeHTML(spot.address || spot.description)} · ${escapeHTML(CATEGORY_LABELS[spot.category] || spot.category)} · ${spot.likes} 赞 · ${escapeHTML(spot.created_at)}</p></div><div class="admin-actions"><select class="admin-category" data-category-id="${spot.id}">${categoryOptions(spot)}</select><button data-save-category-id="${spot.id}" type="button">改分类</button><button class="delete" data-delete-id="${spot.id}" type="button">删除</button></div></article>`).join("") : "<p>没有找到匹配的地点。</p>";
     allSpotsList.querySelectorAll("button[data-delete-id]").forEach((button) => button.addEventListener("click", () => deleteSpot(button.dataset.deleteId)));
+    allSpotsList.querySelectorAll("button[data-save-category-id]").forEach((button) => button.addEventListener("click", async () => {
+      const id = button.dataset.saveCategoryId;
+      const select = allSpotsList.querySelector(`select[data-category-id="${id}"]`);
+      try {
+        await request(`/admin/spots/${id}/category`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category: select.value }) });
+        message.textContent = "分类已更新";
+        await loadAllSpots();
+      } catch (error) { message.textContent = error.message; }
+    }));
   } catch (error) { message.textContent = error.message; }
 }
 

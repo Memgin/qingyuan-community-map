@@ -104,6 +104,8 @@ async function dispatch(request, env) {
     if (statusMatch && request.method === "PATCH") return updateStatus(request, env, Number(statusMatch[1]));
     const adminDeleteMatch = url.pathname.match(/^\/api\/admin\/spots\/(\d+)$/);
     if (adminDeleteMatch && request.method === "DELETE") return adminDeleteSpot(request, env, Number(adminDeleteMatch[1]));
+    const adminCategoryMatch = url.pathname.match(/^\/api\/admin\/spots\/(\d+)\/category$/);
+    if (adminCategoryMatch && request.method === "POST") return adminUpdateSpotCategory(request, env, Number(adminCategoryMatch[1]));
     if (url.pathname === "/api/admin/spots/all" && request.method === "GET") return listAdminSpots(request, url, env);
     if (url.pathname === "/api/admin/users/reset-password" && request.method === "POST") return adminResetPassword(request, env);
     if (url.pathname === "/api/admin/reset-requests" && request.method === "GET") return listResetRequests(request, env);
@@ -1156,6 +1158,17 @@ async function amapCheck(request, env) {
 }
 
 // 管理员删除点位，同时清理点赞、举报与私人地图收藏，避免留下脏数据
+// 管理员修改点位分类：普通编辑接口只限提交者本人，管理员需要全量权限。
+// 更新 updated_at 使增量同步（since）能把新分类推给 App 端
+async function adminUpdateSpotCategory(request, env, id) {
+  if (!authorized(request, env)) return json({ error: "未授权" }, 401, env);
+  const body = await request.json().catch(() => ({}));
+  if (!CATEGORIES.has(body.category)) return json({ error: "分类无效" }, 400, env);
+  const result = await env.DB.prepare("UPDATE spots SET category = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(body.category, id).run();
+  if (!result.meta.changes) return json({ error: "地点不存在" }, 404, env);
+  return json({ id, category: body.category, updated: true }, 200, env);
+}
+
 async function adminDeleteSpot(request, env, id) {
   if (!authorized(request, env)) return json({ error: "未授权" }, 401, env);
   const spot = await env.DB.prepare("SELECT id, name FROM spots WHERE id = ?").bind(id).first();
