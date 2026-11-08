@@ -48,9 +48,17 @@ function renderList() {
     const rating = spot.review_count
       ? `<div class="card-rating"><span class="stars">${starsHTML(spot.avg_rating)}</span>${Number(spot.avg_rating).toFixed(1)}<small>${spot.review_count} 条点评</small></div>`
       : '<div class="card-rating"><small>暂无评分</small></div>';
-    return `<article class="spot-card"><a class="all-card-link" href="index.html?spot=${spot.id}&detail=1">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div></a>${rating}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${escapeHTML(spot.address || "地图上的目的地")} · 导航</a><p>${escapeHTML(spot.description || "")}</p><div class="card-footer"><small>♡ ${spot.likes ?? 0}</small><a class="text-button" href="index.html?spot=${spot.id}&detail=1">点评 →</a><small>${escapeHTML((spot.created_at || "").slice(0, 10))}</small></div></article>`;
+    const hotBadge = Number.isFinite(Number(spot.hot_score)) && Number(spot.hot_score) > 0 ? `<small title="点赞 + 点评×2 + 导航×2">🔥 ${spot.hot_score}</small>` : "";
+    return `<article class="spot-card"><a class="all-card-link" href="index.html?spot=${spot.id}&detail=1">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div></a>${rating}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-nav-id="${spot.id}">⌖ ${escapeHTML(spot.address || "地图上的目的地")} · 导航</a><p>${escapeHTML(spot.description || "")}</p><div class="card-footer"><small>♡ ${spot.likes ?? 0}</small>${hotBadge}<a class="text-button" href="index.html?spot=${spot.id}&detail=1">点评 →</a><small>${escapeHTML((spot.created_at || "").slice(0, 10))}</small></div></article>`;
   }).join("") || '<div class="empty-state">这个分类下还没有地点。</div>';
 }
+
+// 导航点击埋点：与主页 app.js 相同，跳转前异步上报，计入综合热度
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("a[data-nav-id]");
+  if (!link) return;
+  try { navigator.sendBeacon(`${API_BASE}/spots/${link.dataset.navId}/navigate`); } catch { /* 埋点失败不影响跳转 */ }
+});
 
 function starsHTML(rating) {
   const value = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)));

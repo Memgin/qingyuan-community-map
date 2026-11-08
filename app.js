@@ -65,6 +65,14 @@ function exitCorrectionMode() {
   correctionBar.hidden = true;
 }
 
+// 导航点击埋点：跳高德前异步上报（sendBeacon 不阻塞跳转，失败静默），
+// 次数计入综合热度（点赞 + 点评×2 + 导航×2），导航多的地点推荐更靠前
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("a[data-nav-id]");
+  if (!link) return;
+  try { navigator.sendBeacon(`${API_BASE}/spots/${link.dataset.navId}/navigate`); } catch { /* 埋点失败不影响跳转 */ }
+});
+
 // InfoWindow 内容是字符串模板，用事件委托接「位置纠偏 / 查看点评 / 用户主页 / 删除点评」点击
 document.addEventListener("click", (event) => {
   const correctButton = event.target.closest("[data-correct-id]");
@@ -331,9 +339,9 @@ async function loadMapSpots() {
   }
 }
 
-// 列表使用后端真分页：只取当前页，分类与关键词交由后端过滤；主页按点赞数排序（热门优先）
+// 列表使用后端真分页：只取当前页，分类与关键词交由后端过滤；主页按综合热度排序（点赞+点评+导航）
 async function loadListPage() {
-  const params = new URLSearchParams({ page: String(state.page), limit: String(state.pageSize), sort: "likes" });
+  const params = new URLSearchParams({ page: String(state.page), limit: String(state.pageSize), sort: "hot" });
   if (state.filter !== "all") params.set("category", state.filter);
   if (state.query) params.set("q", state.query);
   try {
@@ -634,7 +642,7 @@ function popupContentHTML(spot, wallHTML) {
   const ratingLine = spot.review_count
     ? `<div class="popup-rating"><span class="stars">${starsHTML(spot.avg_rating)}</span><small>${Number(spot.avg_rating).toFixed(1)} · ${spot.review_count} 条点评</small><button class="detail-link" data-detail-id="${spot.id}" type="button">查看点评 →</button></div>`
     : `<div class="popup-rating"><button class="detail-link" data-detail-id="${spot.id}" type="button">评分与点评 →</button></div>`;
-  return `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small>${ratingLine}<a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener">⌖ ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button">📍 位置纠偏</button><p>${description}</p>${wallHTML}</div>`;
+  return `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small>${ratingLine}<a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-nav-id="${spot.id}">⌖ ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button">📍 位置纠偏</button><p>${description}</p>${wallHTML}</div>`;
 }
 
 function renderMarkers() {
@@ -689,8 +697,9 @@ function renderList() {
     const saveButton = state.currentUser && !state.myOnly ? `<button class="save-map-button" data-map-spot-id="${spot.id}" type="button">收藏</button>` : "";
     const reportButton = !state.myOnly ? `<button class="report-button" data-report-id="${spot.id}" type="button">举报</button>` : "";
     const statusText = spot.status === "pending" ? "待审核 · 点击查看位置" : "点击查看点评";
+    const hotBadge = Number.isFinite(Number(spot.hot_score)) && Number(spot.hot_score) > 0 ? `<small title="点赞 + 点评×2 + 导航×2">🔥 ${spot.hot_score}</small>` : "";
     const address = escapeHTML(spot.address || "地图上的目的地");
-    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}" data-spot-id="${spot.id}">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div>${ratingLineHTML(spot)}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><small>${statusText}</small><span class="card-actions">${editButton}${saveButton}${reportButton}${deleteButton}<button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button></span></div></article>`;
+    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}" data-spot-id="${spot.id}">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div>${ratingLineHTML(spot)}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true" data-nav-id="${spot.id}">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><small>${statusText}</small>${hotBadge}<span class="card-actions">${editButton}${saveButton}${reportButton}${deleteButton}<button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button></span></div></article>`;
   };
   spotList.innerHTML = list.length ? list.map(cardHTML).join("") : '<div class="empty-state">没有找到匹配的地点，换个关键词试试。</div>';
   document.querySelector("#pageInfo").textContent = `${state.page} / ${totalPages}`;
@@ -1263,6 +1272,7 @@ function openSpotDetail(spotId) {
   tag.style.setProperty("--chip-color", item.color);
   const navigate = document.querySelector("#detailNavigate");
   navigate.href = navigationURL(spot);
+  navigate.dataset.navId = spot.id;
   navigate.textContent = `⌖ ${spot.address || "地图上的目的地"} · 导航`;
   document.querySelector("#detailDescription").textContent = spot.description || "";
   document.querySelector("#ratingSummary").innerHTML = '<span class="field-note">评分加载中…</span>';

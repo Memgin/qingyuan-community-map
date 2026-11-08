@@ -41,6 +41,8 @@ const SPOT_SUBMIT_LIMIT_PER_HOUR = 10;
 const AMAP_PROXY_LIMIT_PER_HOUR = 60;
 // 大众点评写入（发表或修改）限流：防刷屏
 const REVIEW_WRITE_LIMIT_PER_HOUR = 20;
+// 导航点击埋点限流：按来源 IP 每小时 60 次，防脚本刷热度
+const NAVIGATE_LIMIT_PER_HOUR = 60;
 
 async function dispatch(request, env) {
   const url = new URL(request.url);
@@ -70,6 +72,8 @@ async function dispatch(request, env) {
     if (url.pathname === "/api/push-token" && request.method === "DELETE") return removePushToken(request, env);
     const likeMatch = url.pathname.match(/^\/api\/spots\/(\d+)\/like$/);
     if (likeMatch && request.method === "POST") return likeSpot(request, env, Number(likeMatch[1]));
+    const navigateMatch = url.pathname.match(/^\/api\/spots\/(\d+)\/navigate$/);
+    if (navigateMatch && request.method === "POST") return trackNavigation(request, env, Number(navigateMatch[1]));
     const reportMatch = url.pathname.match(/^\/api\/spots\/(\d+)\/report$/);
     if (reportMatch && request.method === "POST") return reportSpot(request, env, Number(reportMatch[1]));
     const deleteMatch = url.pathname.match(/^\/api\/spots\/(\d+)$/);
@@ -136,12 +140,14 @@ async function listSpots(request, url, env) {
   if (query) { conditions.push("(name LIKE ? OR description LIKE ?)"); bindings.push(`%${query}%`, `%${query}%`); }
   if (since) { conditions.push("COALESCE(updated_at, created_at) > ?"); bindings.push(since); }
   const where = conditions.join(" AND ");
-  // 排序：默认按加入时间；sort=likes 按点赞数（同赞数按时间新→旧）
-  const orderClause = url.searchParams.get("sort") === "likes" ? "ORDER BY likes DESC, created_at DESC" : "ORDER BY created_at DESC";
+  // 排序：默认按加入时间；sort=likes 按点赞数；sort=hot 按综合热度（点赞×1 + 点评×2 + 导航×2）
+  const sort = url.searchParams.get("sort");
+  const hotExpression = "(spots.likes + (SELECT COUNT(*) FROM reviews r WHERE r.spot_id = spots.id) * 2 + spots.nav_count * 2)";
+  const orderClause = sort === "hot" ? `ORDER BY ${hotExpression} DESC, created_at DESC` : (sort === "likes" ? "ORDER BY likes DESC, created_at DESC" : "ORDER BY created_at DESC");
   const count = await env.DB.prepare(`SELECT COUNT(*) AS total FROM spots WHERE ${where}`).bind(...bindings).first();
   const columns = fields === "map" ? "id, name, category, lat, lng, address, description, image_url" : "id, name, address, category, description, lat, lng, image_url, likes, created_at";
-  // 列表附带评分聚合（点评均分与条数）；reviews 表不存在（未跑迁移）时自动降级为无评分字段
-  const ratingColumns = ", (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.spot_id = spots.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.spot_id = spots.id) AS review_count";
+  // 列表附带评分聚合与综合热度分；reviews/nav_count 未迁移时自动降级为无这些字段
+  const ratingColumns = `, (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.spot_id = spots.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.spot_id = spots.id) AS review_count, ${hotExpression} AS hot_score`;
   let rows;
   try {
     rows = await env.DB.prepare(`SELECT ${columns}${ratingColumns} FROM spots WHERE ${where} ${orderClause} LIMIT ? OFFSET ?`).bind(...bindings, limit, (page - 1) * limit).all();
@@ -856,6 +862,15 @@ async function actorKeyOf(request, env) {
   const user = await authenticatedUser(request, env);
   if (user) return { key: `user:${user.id}`, fromUser: true };
   return { key: request.headers.get("X-Actor-Token"), fromUser: false };
+}
+
+// POST /api/spots/:id/navigate：导航点击埋点（公开接口，前端跳转高德前 sendBeacon 上报）。
+// 按来源 IP 限流防刷；超限或表未迁移时静默成功，绝不打扰用户跳转
+async function trackNavigation(request, env, id) {
+  const rate = await consumeRateLimit(env, "navigate", rateIdentity(request, null), NAVIGATE_LIMIT_PER_HOUR);
+  if (!rate.allowed) return json({ ok: true }, 200, env);
+  const result = await env.DB.prepare("UPDATE spots SET nav_count = nav_count + 1 WHERE id = ? AND status = 'approved'").bind(id).run().catch(() => null);
+  return json({ ok: Boolean(result) }, 200, env);
 }
 
 async function likeSpot(request, env, id) {
