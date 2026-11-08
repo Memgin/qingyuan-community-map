@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261102-18">
+  <link rel="stylesheet" href="style.css?v=20261102-19">
 </head>
 <body>
   <main class="app-shell">
@@ -29,6 +29,31 @@
       <p class="intro-copy">从一顿热饭，到一条河边小路。这里是清远人的私藏地图。</p>
       <button class="primary-button" id="addSpotButton" type="button"><span>+</span> 添加一个地点</button>
       <div class="stats-row"><div><strong id="spotCount">8</strong><span>已收录点位</span></div><div><strong>6</strong><span>地点分类</span></div></div>
+    </section>
+
+    <section class="detail-panel" id="detailPanel" hidden>
+      <button class="text-button" id="closeDetailButton" type="button">← 返回</button>
+      <img id="detailImage" class="detail-image" alt="" hidden>
+      <p class="eyebrow">REVIEWS / 大众点评</p>
+      <h2 id="detailTitle"></h2>
+      <p class="detail-meta"><span id="detailCategory" class="category-tag"></span></p>
+      <a id="detailNavigate" class="spot-address navigate-link" target="_blank" rel="noopener"></a>
+      <p id="detailDescription" class="detail-description"></p>
+      <div class="rating-summary" id="ratingSummary"><span class="field-note">评分加载中…</span></div>
+      <h3 class="review-section-title">全部点评</h3>
+      <div id="reviewList" class="review-list"><span class="field-note">点评加载中…</span></div>
+      <form id="reviewForm" class="review-form">
+        <label id="reviewFormLabel">我的点评（一人一店一条，再次提交为修改）</label>
+        <div class="star-input" id="starInput" aria-label="选择评分"></div>
+        <textarea id="reviewContent" rows="3" maxlength="500" placeholder="说说这家店的味道、环境、服务……"></textarea>
+        <label class="anon-toggle"><input type="checkbox" id="reviewAnonymous"> 匿名点评（显示为「匿名用户」和模糊头像，他人无法进入你的主页）</label>
+        <button class="primary-button full-width" type="submit" id="reviewSubmitButton">发表点评 <span>→</span></button>
+        <p class="form-message" id="reviewMessage" role="status"></p>
+      </form>
+      <div id="reviewLoginHint" class="review-login-hint" hidden>
+        <p class="field-note">登录后即可点评；可以选择匿名，匿名点评不会暴露你的账号。</p>
+        <button class="address-search-button" id="reviewLoginButton" type="button">登录 / 注册</button>
+      </div>
     </section>
 
     <section class="map-panel" aria-label="清远地图">
@@ -106,35 +131,6 @@
       <p class="form-message" id="formMessage" role="status"></p>
     </section>
   </div>
-  <div class="modal-backdrop" id="detailBackdrop" hidden>
-    <section class="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
-      <liquid-glass class="glass-layer" backdrop-selector=".app-shell" radius="18" blur="10" saturation="1.15"></liquid-glass>
-      <button class="close-button" id="closeDetailButton" type="button" aria-label="关闭">×</button>
-      <div class="detail-inner">
-      <img id="detailImage" class="detail-image" alt="" hidden>
-      <p class="eyebrow">REVIEWS / 大众点评</p>
-      <h2 id="detailTitle"></h2>
-      <p class="detail-meta"><span id="detailCategory" class="category-tag"></span></p>
-      <a id="detailNavigate" class="spot-address navigate-link" target="_blank" rel="noopener"></a>
-      <p id="detailDescription" class="detail-description"></p>
-      <div class="rating-summary" id="ratingSummary"><span class="field-note">评分加载中…</span></div>
-      <h3 class="review-section-title">全部点评</h3>
-      <div id="reviewList" class="review-list"><span class="field-note">点评加载中…</span></div>
-      <form id="reviewForm" class="review-form">
-        <label id="reviewFormLabel">我的点评（一人一店一条，再次提交为修改）</label>
-        <div class="star-input" id="starInput" aria-label="选择评分"></div>
-        <textarea id="reviewContent" rows="3" maxlength="500" placeholder="说说这家店的味道、环境、服务……"></textarea>
-        <label class="anon-toggle"><input type="checkbox" id="reviewAnonymous"> 匿名点评（显示为「匿名用户」和模糊头像，他人无法进入你的主页）</label>
-        <button class="primary-button full-width" type="submit" id="reviewSubmitButton">发表点评 <span>→</span></button>
-        <p class="form-message" id="reviewMessage" role="status"></p>
-      </form>
-      <div id="reviewLoginHint" class="review-login-hint" hidden>
-        <p class="field-note">登录后即可点评；可以选择匿名，匿名点评不会暴露你的账号。</p>
-        <button class="address-search-button" id="reviewLoginButton" type="button">登录 / 注册</button>
-      </div>
-      </div>
-    </section>
-  </div>
 
   <div class="modal-backdrop" id="profileBackdrop" hidden>
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
@@ -202,6 +198,6 @@
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
   <script src="demo-data.js?v=20261102-1"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/simple-liquid-glass@5.6.0/dist/web-component.esm.js"></script>
-  <script src="app.js?v=20261102-41"></script>
+  <script src="app.js?v=20261102-42"></script>
 </body>
 </html>

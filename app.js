@@ -1262,10 +1262,21 @@ function ratingLineHTML(spot) {
 }
 function formatReviewTime(value) { return escapeHTML(String(value || "").slice(0, 16)); }
 
-/* ---------------- 地点详情 + 评论区 ---------------- */
-const detailBackdrop = document.querySelector("#detailBackdrop");
+/* ---------------- 地点详情 + 评论区（左列就地面板：覆盖 hero，右侧地图保留定位显示） ---------------- */
+const detailPanel = document.querySelector("#detailPanel");
+const introPanel = document.querySelector(".intro-panel");
 let detailSpotId = null;
 let reviewStarValue = 5;
+
+function showDetailPanel() {
+  if (introPanel) introPanel.hidden = true;
+  detailPanel.hidden = false;
+  detailPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function hideDetailPanel() {
+  detailPanel.hidden = true;
+  if (introPanel) introPanel.hidden = false;
+}
 
 function setReviewStars(value) {
   reviewStarValue = value;
@@ -1305,7 +1316,7 @@ function openSpotDetail(spotId) {
   // 表单可见性：未登录提示登录；登录则展示（提交逻辑里会预填我的点评）
   document.querySelector("#reviewForm").hidden = !state.currentUser;
   document.querySelector("#reviewLoginHint").hidden = Boolean(state.currentUser);
-  detailBackdrop.hidden = false;
+  showDetailPanel();
   renderStarInput();
   setReviewStars(5);
   document.querySelector("#reviewContent").value = "";
@@ -1413,8 +1424,7 @@ async function deleteMyReview(reviewId) {
 }
 
 document.querySelector("#reviewLoginButton").addEventListener("click", openAuth);
-document.querySelector("#closeDetailButton").addEventListener("click", () => { detailBackdrop.hidden = true; });
-detailBackdrop.addEventListener("click", (event) => { if (event.target === detailBackdrop) detailBackdrop.hidden = true; });
+document.querySelector("#closeDetailButton").addEventListener("click", hideDetailPanel);
 
 /* ---------------- 用户公开主页（点击实名点评头像进入） ---------------- */
 const profileBackdrop = document.querySelector("#profileBackdrop");
@@ -1521,7 +1531,7 @@ document.querySelector("#settingsForm").addEventListener("submit", async (event)
 // Esc 关闭点评相关弹窗
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
-  detailBackdrop.hidden = true;
+  hideDetailPanel();
   profileBackdrop.hidden = true;
   settingsBackdrop.hidden = true;
 });
