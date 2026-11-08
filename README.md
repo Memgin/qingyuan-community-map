@@ -277,7 +277,6 @@ npx wrangler pages deploy . --project-name qymap --branch main
 | --- | --- |
 | `docs/清远社区共享地图项目 · 完整实施规划文档.md` | 需求、功能清单、实现记录、历史问题与排查结论 |
 | `docs/鸿蒙期末项目可行性评估.md` | 将本项目改造为 HarmonyOS（DevEco Studio）应用的可行性评估与完整任务清单 |
-| `docs/修复记录-向导区地图不显示.md` | 向导区小地图空白问题的根因（flex 收缩）与修复过程 |
 | `docs/aiguide-待完成功能.md` | AI 向导地图功能清单（已完成 / 待实现，2026-11-08 更新） |
 
 ---
