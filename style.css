@@ -200,6 +200,14 @@ button { cursor: pointer; }
 .private-map-item.active small { color: rgba(255,255,255,.7); }
 .private-map-detail { margin-top: 14px; display: grid; gap: 8px; }
 .private-map-detail[hidden] { display: none; }
+.private-map-detail-list { display: grid; gap: 8px; }
+.map-detail-head { display: grid; gap: 10px; padding: 10px 12px; background: rgba(255,255,255,.78); border: 1px solid var(--line); }
+.map-detail-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.map-name-input { margin: 0; flex: 1; min-width: 0; font-size: 14px; font-weight: 700; padding: 8px 10px; }
+.map-detail-head .card-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.map-detail-head .card-actions .text-button { font-size: 12px; }
+.map-detail-head .card-actions button[disabled] { opacity: .45; cursor: not-allowed; }
+.map-detail-head .card-actions .delete-map-button { color: var(--coral); }
 .auto-map-form { margin-top: 8px; }
 .trash-toggle { display: block; margin-top: 12px; color: var(--muted); font-size: 12px; }
 .trash-toggle.active { color: var(--coral); }

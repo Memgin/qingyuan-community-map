@@ -1210,41 +1210,50 @@ async function openMapDetail(mapId) {
   const detail = document.querySelector("#privateMapDetail");
   detail.hidden = false;
   detail.innerHTML = '<span class="field-note">加载中……</span>';
+  const mapItem = state.myMaps.find((m) => m.id === mapId);
   const response = await apiFetch(`${API_BASE}/maps/${mapId}/spots`, { headers: authHeaders() });
   if (!response || !response.ok) { detail.innerHTML = '<span class="field-note">加载失败，请稍后重试</span>'; return; }
   const payload = await response.json();
   const spots = payload.data || [];
-  const mapItem = state.myMaps.find((m) => m.id === mapId);
-  if (!spots.length) { detail.innerHTML = `<p class="field-note">「${escapeHTML(mapItem?.name || "该地图")}」还没有收藏点位，去上面的列表点「收藏」吧。</p>`; return; }
   const isOwnerMap = mapItem?.role !== "editor";
-  const statusLabel = mapItem?.role === "editor" ? " · 协作地图" : (mapItem?.shared ? " · 已分享" : "");
+  const statusLabel = mapItem?.role === "editor" ? '<span class="collab-tag">协作地图</span>' : (mapItem?.shared ? '<span class="collab-tag">已分享</span>' : "");
   // 删除/分享/成员管理仅主人可用；协作者可编辑点位与名称
-  const ownerActions = isOwnerMap ? `<button class="text-button share-map-button" type="button">分享</button>${mapItem?.shared ? '<button class="text-button unshare-map-button" type="button">取消分享</button>' : ""}<button class="remove-map-spot delete-map-button" type="button">删除地图</button>` : "";
-  detail.innerHTML = `<p class="private-map-detail-title"><span>「${escapeHTML(mapItem?.name || "")}」的 ${spots.length} 个点位${statusLabel}</span><span class="card-actions"><button class="text-button plan-route-button" type="button">顺路规划</button><button class="text-button collab-button" type="button">协作</button><button class="text-button rename-map-button" type="button">重命名</button>${ownerActions}</span></p>` + spots.map((spot) => `<div class="private-map-spot"><div class="private-map-spot-info"><strong>${escapeHTML(spot.name)}</strong><span>${escapeHTML(spot.address || "")}</span></div><span class="card-actions"><button class="text-button highlight-map-spot" data-spot-id="${spot.id}" type="button">主地图高亮</button><button class="remove-map-spot" data-spot-id="${spot.id}" type="button">移除</button></span></div>`).join("") + '<div id="collabSection" class="collab-section" hidden></div>';
+  const ownerActions = isOwnerMap ? `<button class="text-button share-map-button" type="button">${mapItem?.shared ? "取消分享" : "分享"}</button><button class="remove-map-spot delete-map-button" type="button">删除地图</button>` : "";
+  // 头部：地图名称直接在输入框里改（替代原来的 prompt 重命名），旁边是操作按钮
+  const head = `<div class="map-detail-head">
+    <div class="map-detail-name"><input id="mapNameInput" value="${escapeHTML(mapItem?.name || "")}" maxlength="40" aria-label="地图名称"><button class="text-button rename-save-button" type="button">保存名称</button>${statusLabel}</div>
+    <div class="card-actions"><button class="text-button plan-route-button" type="button" ${spots.length < 2 ? "disabled title=\"至少收藏 2 个点位才能规划路线\"" : ""}>顺路规划</button><button class="text-button collab-button" type="button">协作</button>${ownerActions}</div>
+  </div>`;
+  const bodyHTML = spots.length
+    ? spots.map((spot) => `<div class="private-map-spot"><div class="private-map-spot-info"><strong>${escapeHTML(spot.name)}</strong><span>${escapeHTML(spot.address || "")}</span></div><span class="card-actions"><button class="text-button highlight-map-spot" data-spot-id="${spot.id}" type="button">主地图高亮</button><button class="remove-map-spot" data-spot-id="${spot.id}" type="button">移除</button></span></div>`).join("")
+    : '<p class="field-note">这张地图还没有收藏点位：在上方「热门地点」列表的卡片上点「收藏」，就能把点位加进来。</p>';
+  detail.innerHTML = head + `<div class="private-map-detail-list">${bodyHTML}</div>` + '<div id="collabSection" class="collab-section" hidden></div>';
   detail.querySelectorAll(".highlight-map-spot").forEach((button) => button.addEventListener("click", () => highlightMapSpots(mapId)));
   // 顺路规划：复用 AI 推荐的贪心排序 + 向导区小地图画线，把收藏点位串成一条路线
-  detail.querySelector(".plan-route-button").addEventListener("click", () => {
+  const planButton = detail.querySelector(".plan-route-button");
+  if (planButton) planButton.addEventListener("click", () => {
     if (spots.length < 2) { showToast("这张地图至少要 2 个点位才能规划路线"); return; }
     drawRoute(spots);
     document.querySelector("#guideMap").scrollIntoView({ behavior: "smooth", block: "center" });
   });
-  // 只读分享：生成（或复用）分享令牌，拼成 shared.html 链接并复制（仅主人）
+  // 分享 / 取消分享合并为一个按钮，随状态切换文案（仅主人）
   const shareButton = detail.querySelector(".share-map-button");
   if (shareButton) shareButton.addEventListener("click", async () => {
+    if (mapItem?.shared) {
+      if (!window.confirm("取消后，之前分享的链接将立即失效（再次点「分享」会生成新链接）。确定吗？")) return;
+      const response2 = await apiFetch(`${API_BASE}/maps/${mapId}/share`, { method: "DELETE", headers: authHeaders() });
+      if (!response2 || !response2.ok) { showToast("操作失败，请稍后重试"); return; }
+      showToast("已取消分享");
+      await loadMaps();
+      if (state.openMapId === mapId) await openMapDetail(mapId);
+      return;
+    }
     const response2 = await apiFetch(`${API_BASE}/maps/${mapId}/share`, { method: "POST", headers: authHeaders() });
     const payload2 = await response2.json().catch(() => ({}));
     if (!response2 || !response2.ok) { showToast(payload2.error || "生成分享链接失败"); return; }
     const url = `${location.origin}/shared.html?t=${payload2.share_token}`;
     try { await navigator.clipboard.writeText(url); showToast("只读分享链接已复制，发给朋友即可查看"); }
     catch { window.prompt("复制下面的只读分享链接", url); }
-  });
-  // 取消分享：令牌清空，之前发出的链接全部立即失效
-  const unshareButton = detail.querySelector(".unshare-map-button");
-  if (unshareButton) unshareButton.addEventListener("click", async () => {
-    if (!window.confirm("取消后，之前分享的链接将立即失效（再次点「分享」会生成新链接）。确定吗？")) return;
-    const response2 = await apiFetch(`${API_BASE}/maps/${mapId}/share`, { method: "DELETE", headers: authHeaders() });
-    if (!response2 || !response2.ok) { showToast("操作失败，请稍后重试"); return; }
-    showToast("已取消分享");
     await loadMaps();
     if (state.openMapId === mapId) await openMapDetail(mapId);
   });
@@ -1254,7 +1263,7 @@ async function openMapDetail(mapId) {
     if (!section.hidden) { section.hidden = true; section.innerHTML = ""; return; }
     renderCollabSection(section, mapId);
   });
-  detail.querySelectorAll(".remove-map-spot").forEach((button) => button.addEventListener("click", async (event) => {
+  detail.querySelectorAll(".remove-map-spot[data-spot-id]").forEach((button) => button.addEventListener("click", async (event) => {
     event.stopPropagation();
     const response2 = await apiFetch(`${API_BASE}/maps/${mapId}/spots/${button.dataset.spotId}`, { method: "DELETE", headers: authHeaders() });
     if (!response2 || !response2.ok) { showToast("移除失败，请稍后重试"); return; }
@@ -1262,18 +1271,20 @@ async function openMapDetail(mapId) {
     await loadMaps();
     if (state.openMapId === mapId) await openMapDetail(mapId);
   }));
-  // 重命名地图（与项目现有交互一致，用 prompt）
-  detail.querySelector(".rename-map-button").addEventListener("click", async () => {
-    const mapItem = state.myMaps.find((m) => m.id === mapId);
-    const name = window.prompt("新的地图名称（2-40 字符）", mapItem?.name || "");
-    if (!name || !name.trim()) return;
-    const response2 = await apiFetch(`${API_BASE}/maps/${mapId}`, { method: "PATCH", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ name: name.trim() }) });
+  // 地图名称就地修改：点「保存名称」或回车提交
+  const nameInput = detail.querySelector("#mapNameInput");
+  const saveName = async () => {
+    const name = nameInput.value.trim();
+    if (!name || name === (mapItem?.name || "")) return;
+    const response2 = await apiFetch(`${API_BASE}/maps/${mapId}`, { method: "PATCH", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ name }) });
     const payload2 = await response2.json().catch(() => ({}));
-    if (!response2.ok) { showToast(payload2.error || "重命名失败"); return; }
-    showToast("已重命名");
+    if (!response2.ok) { showToast(payload2.error || "保存失败"); return; }
+    showToast("名称已保存");
     await loadMaps();
     if (state.openMapId === mapId) await openMapDetail(mapId);
-  });
+  };
+  detail.querySelector(".rename-save-button").addEventListener("click", saveName);
+  nameInput.addEventListener("keydown", (event) => { if (event.key === "Enter") saveName(); });
   // 删除地图：软删除进回收站，30 天内可在「最近删除」中恢复（仅主人）
   const deleteButton = detail.querySelector(".delete-map-button");
   if (deleteButton) deleteButton.addEventListener("click", async () => {
