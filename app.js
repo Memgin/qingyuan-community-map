@@ -1273,9 +1273,14 @@ function showDetailPanel() {
   detailPanel.hidden = false;
   detailPanel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
+// 进入详情前的高亮集合（如 AI 推荐的高亮），关闭详情时恢复
+let highlightBeforeDetail = null;
 function hideDetailPanel() {
   detailPanel.hidden = true;
   if (introPanel) introPanel.hidden = false;
+  state.highlightIds = highlightBeforeDetail || new Set();
+  highlightBeforeDetail = null;
+  renderMarkers();
 }
 
 function setReviewStars(value) {
@@ -1298,6 +1303,10 @@ function openSpotDetail(spotId) {
   const spot = findSpotAnywhere(spotId);
   if (!spot) { showToast("未找到该地点"); return; }
   detailSpotId = spot.id;
+  // 地图上高亮当前详情点位（橙色光圈），方便在多图钉中区分；关闭详情时恢复之前的高亮
+  if (detailPanel.hidden) highlightBeforeDetail = state.highlightIds;
+  state.highlightIds = new Set([String(spot.id)]);
+  renderMarkers();
   const item = categories[spot.category] || categories.all;
   const image = document.querySelector("#detailImage");
   if (spot.image_url) { image.src = spot.image_url; image.hidden = false; image.alt = spot.name; } else { image.hidden = true; image.removeAttribute("src"); }
