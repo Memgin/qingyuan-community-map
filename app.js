@@ -331,9 +331,9 @@ async function loadMapSpots() {
   }
 }
 
-// 列表使用后端真分页：只取当前页，分类与关键词交由后端过滤
+// 列表使用后端真分页：只取当前页，分类与关键词交由后端过滤；主页按点赞数排序（热门优先）
 async function loadListPage() {
-  const params = new URLSearchParams({ page: String(state.page), limit: String(state.pageSize) });
+  const params = new URLSearchParams({ page: String(state.page), limit: String(state.pageSize), sort: "likes" });
   if (state.filter !== "all") params.set("category", state.filter);
   if (state.query) params.set("q", state.query);
   try {
@@ -673,14 +673,8 @@ function renderList() {
   const totalPages = Math.max(1, Math.ceil(totalCount / state.pageSize));
   state.page = Math.min(Math.max(1, state.page), totalPages);
   const list = state.myOnly ? state.spots.slice((state.page - 1) * state.pageSize, state.page * state.pageSize) : state.spots;
-  // 按分类分组展示：组序按 categories 定义顺序，组内保持后端返回的时间倒序
-  const grouped = new Map();
-  list.forEach((spot) => {
-    if (!grouped.has(spot.category)) grouped.set(spot.category, []);
-    grouped.get(spot.category).push(spot);
-  });
-  const categoryOrder = Object.keys(categories).filter((key) => key !== "all");
-  const groupCardHTML = (spot) => {
+  // 主页为热门榜：后端按点赞数排序平铺展示（分组会打断热度顺序，已移至 recent.html）
+  const cardHTML = (spot) => {
     const item = categories[spot.category];
     const likeCount = state.likes[spot.id] ?? spot.likes ?? 0;
     // liked 由后端按账号返回，保证网页与 App 的点赞状态一致
@@ -698,12 +692,7 @@ function renderList() {
     const address = escapeHTML(spot.address || "地图上的目的地");
     return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}" data-spot-id="${spot.id}">${image}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}</h3><span class="category-tag" style="--chip-color:${item.color}">${item.label}</span></div>${ratingLineHTML(spot)}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><small>${statusText}</small><span class="card-actions">${editButton}${saveButton}${reportButton}${deleteButton}<button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button></span></div></article>`;
   };
-  spotList.innerHTML = list.length ? [...grouped.entries()]
-    .sort((a, b) => categoryOrder.indexOf(a[0]) - categoryOrder.indexOf(b[0]))
-    .map(([category, spots]) => {
-      const item = categories[category] || { label: category, color: "#2F6D5A" };
-      return `<div class="list-group"><div class="list-group-head"><span class="chip-dot" style="--chip-color:${item.color}"></span>${item.label}<small>${spots.length} 个</small></div><div class="spot-list">${spots.map(groupCardHTML).join("")}</div></div>`;
-    }).join("") : '<div class="empty-state">没有找到匹配的地点，换个关键词试试。</div>';
+  spotList.innerHTML = list.length ? list.map(cardHTML).join("") : '<div class="empty-state">没有找到匹配的地点，换个关键词试试。</div>';
   document.querySelector("#pageInfo").textContent = `${state.page} / ${totalPages}`;
   document.querySelector("#previousPageButton").disabled = state.page <= 1;
   document.querySelector("#nextPageButton").disabled = state.page >= totalPages;

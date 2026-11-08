@@ -136,15 +136,17 @@ async function listSpots(request, url, env) {
   if (query) { conditions.push("(name LIKE ? OR description LIKE ?)"); bindings.push(`%${query}%`, `%${query}%`); }
   if (since) { conditions.push("COALESCE(updated_at, created_at) > ?"); bindings.push(since); }
   const where = conditions.join(" AND ");
+  // 排序：默认按加入时间；sort=likes 按点赞数（同赞数按时间新→旧）
+  const orderClause = url.searchParams.get("sort") === "likes" ? "ORDER BY likes DESC, created_at DESC" : "ORDER BY created_at DESC";
   const count = await env.DB.prepare(`SELECT COUNT(*) AS total FROM spots WHERE ${where}`).bind(...bindings).first();
   const columns = fields === "map" ? "id, name, category, lat, lng, address, description, image_url" : "id, name, address, category, description, lat, lng, image_url, likes, created_at";
   // 列表附带评分聚合（点评均分与条数）；reviews 表不存在（未跑迁移）时自动降级为无评分字段
   const ratingColumns = ", (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.spot_id = spots.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.spot_id = spots.id) AS review_count";
   let rows;
   try {
-    rows = await env.DB.prepare(`SELECT ${columns}${ratingColumns} FROM spots WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...bindings, limit, (page - 1) * limit).all();
+    rows = await env.DB.prepare(`SELECT ${columns}${ratingColumns} FROM spots WHERE ${where} ${orderClause} LIMIT ? OFFSET ?`).bind(...bindings, limit, (page - 1) * limit).all();
   } catch {
-    rows = await env.DB.prepare(`SELECT ${columns} FROM spots WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...bindings, limit, (page - 1) * limit).all();
+    rows = await env.DB.prepare(`SELECT ${columns} FROM spots WHERE ${where} ${orderClause} LIMIT ? OFFSET ?`).bind(...bindings, limit, (page - 1) * limit).all();
   }
   // 登录用户附带自己的点赞状态，使网页与 App 的点赞跨端一致
   let data = rows.results;

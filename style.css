@@ -133,11 +133,6 @@ button { cursor: pointer; }
   .form-grid { grid-template-columns: 1fr; gap: 0; }
 }
 
-/* 「最近加入」按分类分组：组标题跨整行，组内嵌套 .spot-list 恢复原网格（含响应式断点） */
-.spot-list > .list-group { grid-column: 1 / -1; }
-.list-group-head { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; font-size: 13px; font-weight: 700; color: var(--ink); }
-.list-group-head small { color: var(--muted); font-weight: 400; }
-
 /* 季节推荐：应季主题快捷入口（复用 AI 推荐接口，占整行排成一排） */
 .season-chips { display: flex; flex-wrap: wrap; gap: 8px; flex-basis: 100%; }
 .season-chip { border: 1px solid rgba(25,43,42,.25); background: #fffdf6; padding: 7px 13px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--ink); transition: .15s; }
