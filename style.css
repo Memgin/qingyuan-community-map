@@ -154,6 +154,22 @@ button { cursor: pointer; }
 .more-menu .delete-button:hover, .more-menu .report-button:hover { color: var(--coral); background: #fdf2ef; }
 .pending-tag { display: inline-block; margin-left: 6px; padding: 1px 6px; background: rgba(217,154,71,.18); color: #a9741f; font-size: 9px; font-weight: 700; vertical-align: middle; }
 
+/* 管理后台「全部点位」表格：列对齐、状态胶囊、分类下拉选择即保存 */
+.admin-table-wrap { overflow-x: auto; max-width: 1100px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line); }
+.admin-table { width: 100%; border-collapse: collapse; }
+.admin-table th, .admin-table td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); font-size: 12px; }
+.admin-table th { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; }
+.admin-table tbody tr:hover { background: #faf8f0; }
+.admin-table td strong { display: block; font-size: 14px; }
+.admin-table td small { display: block; margin-top: 3px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
+.admin-table select { margin: 0; width: auto; padding: 6px 8px; font-size: 12px; background: #fff; }
+.admin-table .delete { border: 1px solid rgba(235,118,94,.45); background: none; color: var(--coral); padding: 6px 12px; font-size: 12px; cursor: pointer; }
+.admin-table .delete:hover { background: var(--coral); color: #fff; }
+.status-pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 10px; font-weight: 700; }
+.status-pill.approved { background: rgba(104,166,120,.16); color: #2c7a4b; }
+.status-pill.pending { background: rgba(217,154,71,.2); color: #a9741f; }
+.status-pill.rejected { background: rgba(235,118,94,.16); color: var(--coral); }
+
 /* 季节推荐：应季主题快捷入口（复用 AI 推荐接口，占整行排成一排） */
 .season-chips { display: flex; flex-wrap: wrap; gap: 8px; flex-basis: 100%; }
 .season-chip { border: 1px solid rgba(25,43,42,.25); background: #fffdf6; padding: 7px 13px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--ink); transition: .15s; }

@@ -187,16 +187,26 @@ async function loadAllSpots() {
     if (selectedCategory) params.set("category", selectedCategory);
     const payload = await request(`/admin/spots/all?${params}`);
     const categoryOptions = (spot) => ADMIN_CATEGORIES.filter((item) => item.key).map((item) => `<option value="${item.key}"${spot.category === item.key ? " selected" : ""}>${item.label}</option>`).join("");
-    allSpotsList.innerHTML = payload.data.length ? payload.data.map((spot) => `<article class="admin-card"><div><h2>${escapeHTML(spot.name)}<small>${escapeHTML(STATUS_LABELS[spot.status] || spot.status)}</small></h2><p>${escapeHTML(spot.address || spot.description)} · ${escapeHTML(CATEGORY_LABELS[spot.category] || spot.category)} · ${spot.likes} 赞 · ${escapeHTML(spot.created_at)}</p></div><div class="admin-actions"><select class="admin-category" data-category-id="${spot.id}">${categoryOptions(spot)}</select><button data-save-category-id="${spot.id}" type="button">改分类</button><button class="delete" data-delete-id="${spot.id}" type="button">删除</button></div></article>`).join("") : "<p>没有找到匹配的地点。</p>";
+    // 表格化布局：分类下拉选择即保存（无需单独按钮），状态用彩色胶囊标签
+    allSpotsList.innerHTML = payload.data.length ? `<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>地点</th><th>状态</th><th>分类</th><th>点赞</th><th>加入时间</th><th>操作</th></tr></thead><tbody>${payload.data.map((spot) => `<tr>
+      <td><strong>${escapeHTML(spot.name)}</strong><small>${escapeHTML(spot.address || spot.description || "")}</small></td>
+      <td><span class="status-pill ${spot.status}">${escapeHTML(STATUS_LABELS[spot.status] || spot.status)}</span></td>
+      <td><select data-category-id="${spot.id}">${categoryOptions(spot)}</select></td>
+      <td>${spot.likes}</td>
+      <td>${escapeHTML((spot.created_at || "").slice(0, 16))}</td>
+      <td><button class="delete" data-delete-id="${spot.id}" type="button">删除</button></td>
+    </tr>`).join("")}</tbody></table></div>` : "<p>没有找到匹配的地点。</p>";
     allSpotsList.querySelectorAll("button[data-delete-id]").forEach((button) => button.addEventListener("click", () => deleteSpot(button.dataset.deleteId)));
-    allSpotsList.querySelectorAll("button[data-save-category-id]").forEach((button) => button.addEventListener("click", async () => {
-      const id = button.dataset.saveCategoryId;
-      const select = allSpotsList.querySelector(`select[data-category-id="${id}"]`);
+    // 分类下拉选择即保存：成功后刷新以维持分类筛选的正确性，失败回滚显示
+    allSpotsList.querySelectorAll("select[data-category-id]").forEach((select) => select.addEventListener("change", async () => {
       try {
-        await request(`/admin/spots/${id}/category`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category: select.value }) });
+        await request(`/admin/spots/${select.dataset.categoryId}/category`, { method: "POST", body: JSON.stringify({ category: select.value }) });
         message.textContent = "分类已更新";
         await loadAllSpots();
-      } catch (error) { message.textContent = error.message; }
+      } catch (error) {
+        message.textContent = error.message;
+        loadAllSpots();
+      }
     }));
   } catch (error) { message.textContent = error.message; }
 }
