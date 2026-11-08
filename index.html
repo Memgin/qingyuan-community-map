@@ -96,7 +96,7 @@
         <label>地点名称<input name="name" type="text" placeholder="例如：北江边的日落位" maxlength="40" required></label>
         <label>搜索地址或地点<input id="addressInput" name="address" type="search" placeholder="例如：清远站、飞来湖公园" required><button class="address-search-button" id="addressSearchButton" type="button">搜索并定位</button></label>
         <p id="addressMessage" class="form-message" role="status"></p>
-        <label>地点分类<select name="category" required></select></label>
+        <label>地点分类<select name="category" required><option value="scenic">景点</option><option value="food">美食</option><option value="shopping">商圈</option><option value="medical">医疗</option><option value="school">学校</option><option value="transit">车站</option></select></label>
         <label>一句话介绍<textarea name="description" rows="3" maxlength="120" placeholder="说说这里为什么值得来……" required></textarea></label>
         <label>地点图片<input name="image" type="file" accept="image/jpeg,image/png,image/webp"><small class="field-note">可选，最大 2MB</small></label>
         <input name="lat" type="hidden" value=""><input name="lng" type="hidden" value="">
