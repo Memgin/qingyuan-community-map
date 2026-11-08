@@ -194,16 +194,16 @@ button { cursor: pointer; }
 .status-pill.pending { background: rgba(217,154,71,.2); color: #a9741f; }
 .status-pill.rejected { background: rgba(235,118,94,.16); color: var(--coral); }
 
-/* 移动端最终布局（置于文件末尾覆盖前面所有断点）：flex column + order 按手机动线重排
-   打开即地图 → 详情/编辑面板贴地图上方 → 热门地点 → AI 向导 → 品牌区沉底 */
+/* 移动端最终布局（置于文件末尾覆盖前面所有断点）：flex column + order 重排
+   LOCAL/01 品牌区在最前（压缩版）→ 详情/编辑面板（打开时贴其后）→ 地图 → 热门地点 → AI 向导 → 私人地图 */
 @media (max-width: 820px) {
   .app-shell { display: flex; flex-direction: column; min-height: 100svh; }
   .topbar { order: 0; }
-  .detail-panel, .route-editor-panel { order: 1; }
-  .map-panel { order: 2; }
-  .recent-panel { order: 3; }
-  .recommend-panel { order: 4; }
-  .intro-panel { order: 5; padding: 26px 20px 24px; }
+  .intro-panel { order: 1; padding: 26px 20px 24px; }
+  .detail-panel, .route-editor-panel { order: 2; }
+  .map-panel { order: 3; }
+  .recent-panel { order: 4; }
+  .recommend-panel { order: 5; }
   .private-panel { order: 6; }
   .intro-panel h1 { font-size: 27px; }
   .intro-panel .intro-copy { margin: 8px 0 0; }
