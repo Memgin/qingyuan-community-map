@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261102-35">
+  <link rel="stylesheet" href="style.css?v=20261102-36">
 </head>
 <body>
   <main class="app-shell">
@@ -41,6 +41,7 @@
       <div class="rating-summary" id="ratingSummary"><span class="field-note">评分加载中…</span></div>
       <div class="detail-photo" id="detailPhotoBlock" hidden>
         <p class="detail-photo-title">📷 社区照片（追加式，不会覆盖他人的图）</p>
+        <div id="detailPhotoWall" class="detail-photo-wall"><span class="field-note">照片加载中…</span></div>
         <div class="detail-photo-form"><input type="file" id="detailWallImage" accept="image/jpeg,image/png,image/webp"><button class="primary-button" id="detailUploadPhotoButton" type="button">上传照片</button></div>
       </div>
       <h3 class="review-section-title">全部点评</h3>
@@ -256,6 +257,6 @@
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
   <script src="demo-data.js?v=20261102-1"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/simple-liquid-glass@5.6.0/dist/web-component.esm.js"></script>
-  <script src="app.js?v=20261102-47"></script>
+  <script src="app.js?v=20261102-48"></script>
 </body>
 </html>

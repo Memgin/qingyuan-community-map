@@ -1898,6 +1898,7 @@ function openSpotDetail(spotId) {
   // 补图区块：登录用户在详情页直接给点位追加照片
   document.querySelector("#detailPhotoBlock").hidden = !state.currentUser;
   document.querySelector("#detailWallImage").value = "";
+  renderDetailPhotoWall(spot.id);
   showDetailPanel();
   renderStarInput();
   setReviewStars(5);
@@ -2005,6 +2006,23 @@ async function deleteMyReview(reviewId) {
   }
 }
 
+// 详情页照片墙：展示已上传的社区照片（与图钉弹窗共用同一数据源）
+async function renderDetailPhotoWall(spotId) {
+  const wall = document.querySelector("#detailPhotoWall");
+  if (!wall) return;
+  wall.innerHTML = '<span class="field-note">照片加载中…</span>';
+  try {
+    const response = await apiFetch(`${API_BASE}/spots/${spotId}/photos`);
+    const payload = await response.json();
+    const photos = Array.isArray(payload.data) ? payload.data : [];
+    wall.innerHTML = photos.length
+      ? photos.map((photo) => `<figure class="detail-photo-item"><img src="${escapeHTML(photo.url)}" alt="社区照片" loading="lazy"></figure>`).join("")
+      : '<span class="field-note">还没有照片，来传第一张</span>';
+  } catch {
+    wall.innerHTML = '<span class="field-note">照片加载失败</span>';
+  }
+}
+
 document.querySelector("#reviewLoginButton").addEventListener("click", openAuth);
 // 详情页补图：与编辑弹窗的补图同一后端流程（uploads → 照片墙追加）
 document.querySelector("#detailUploadPhotoButton").addEventListener("click", async () => {
@@ -2022,6 +2040,7 @@ document.querySelector("#detailUploadPhotoButton").addEventListener("click", asy
     await requestPhotoAppend(detailSpotId, uploadPayload.url);
     document.querySelector("#detailWallImage").value = "";
     showToast("照片已补充到点位");
+    renderDetailPhotoWall(detailSpotId);
   } catch (error) {
     showToast(error.message);
   } finally {
