@@ -750,8 +750,8 @@ function renderFilters() {
   container.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => { state.filter = button.dataset.filter; state.page = 1; refreshList(); }));
 }
 
-// 地图弹窗模板：评分 + 点评入口 + 基础信息 + 位置纠偏 + 照片墙（wallHTML 由调用方填充）
-function popupContentHTML(spot, wallHTML) {
+// 地图弹窗模板：评分 + 点评入口 + 基础信息 + 位置纠偏（照片墙已移至详情面板轮播）
+function popupContentHTML(spot) {
   const item = categories[spot.category];
   const image = spot.image_url ? `<img src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">` : "";
   const address = escapeHTML(spot.address || "地图上的目的地");
@@ -760,7 +760,16 @@ function popupContentHTML(spot, wallHTML) {
   const ratingLine = spot.review_count
     ? `<div class="popup-rating"><span class="stars">${starsHTML(spot.avg_rating)}</span><small>${Number(spot.avg_rating).toFixed(1)} · ${spot.review_count} 条点评</small><button class="detail-link" data-detail-id="${spot.id}" type="button">查看点评 →</button></div>`
     : `<div class="popup-rating"><button class="detail-link" data-detail-id="${spot.id}" type="button">评分与点评 →</button></div>`;
-  return `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small>${ratingLine}<a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-nav-id="${spot.id}">⌖ ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button">📍 位置纠偏</button><p>${description}</p>${wallHTML}</div>`;
+  const tagLine = parseSpotTagsClient(spot.tags);
+  return `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small>${tagLine ? `<div class="spot-tags">${tagLine}</div>` : ""}${ratingLine}<a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-nav-id="${spot.id}">⌖ ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button">📍 位置纠偏</button><p>${description}</p></div>`;
+}
+
+// 客户端子标签解析：后端 tags 是 JSON 数组字符串，解析失败返回空
+function parseSpotTagsClient(raw) {
+  try {
+    const list = typeof raw === "string" ? JSON.parse(raw) : Array.isArray(raw) ? raw : [];
+    return list.map((tag) => `<span class="tag-chip">${escapeHTML(String(tag))}</span>`).join("");
+  } catch { return ""; }
 }
 
 function renderMarkers() {
@@ -769,30 +778,14 @@ function renderMarkers() {
     const marker = new AMap.Marker({ position: [spot.lng, spot.lat], content: markerIcon(spot.category, state.highlightIds.has(String(spot.id))), offset: new AMap.Pixel(-14, -29), title: spot.name });
     marker.setMap(map);
     marker.on("click", () => {
-      const infoWindow = new AMap.InfoWindow({ content: popupContentHTML(spot, '<div class="popup-wall"><span class="field-note">照片加载中…</span></div>'), offset: new AMap.Pixel(0, -35), closeWhenClickMap: true });
+      const infoWindow = new AMap.InfoWindow({ content: popupContentHTML(spot), offset: new AMap.Pixel(0, -35), closeWhenClickMap: true });
       infoWindow.open(map, marker.getPosition());
-      // 照片墙异步补充：不阻塞弹窗打开，取到后整体重设内容（导航与分类保留在模板里）
-      loadPopupWall(spot, infoWindow);
     });
     return marker;
   });
 }
 
 // 拉取点位社区照片并重绘地图弹窗；spot 来自闭包，字段与列表一致
-async function loadPopupWall(spot, infoWindow) {
-  try {
-    const response = await apiFetch(`${API_BASE}/spots/${spot.id}/photos`);
-    const payload = await response.json();
-    const photos = Array.isArray(payload.data) ? payload.data : [];
-    const wall = photos.length
-      ? `<div class="popup-wall">${photos.slice(0, 6).map((photo) => `<figure class="popup-wall-item"><img src="${escapeHTML(photo.url)}" alt="社区照片"><figcaption>${escapeHTML(photo.username || "社区成员")}</figcaption></figure>`).join("")}</div>`
-      : `<div class="popup-wall"><span class="field-note">暂无社区照片</span></div>`;
-    infoWindow.setContent(popupContentHTML(spot, wall));
-  } catch {
-    // 照片加载失败时保留"加载中"占位，不影响基础信息展示
-  }
-}
-
 function renderList() {
   // 公开模式：state.spots 已是后端返回的当前页数据；我的提交模式仍按本地切片
   const totalCount = state.myOnly ? state.spots.length : state.total;
@@ -829,8 +822,9 @@ function renderList() {
     const metaLine = spot.review_count
       ? `<span class="stars">${starsHTML(spot.avg_rating)}</span> ${Number(spot.avg_rating).toFixed(1)}（${spot.review_count} 条） · ${item.label}`
       : `${item.label} · ${spot.address ? escapeHTML(spot.address.split(" ")[0]) : "待补充"}`;
+    const spotTags = parseSpotTagsClient(spot.tags);
     const address = escapeHTML(spot.address || "地图上的目的地");
-    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}" data-spot-id="${spot.id}">${cover}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}${pendingTag}</h3></div><div class="card-meta">${metaLine}</div><a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true" data-nav-id="${spot.id}">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button><span class="footer-stat">💬 ${spot.review_count || 0}</span>${hotBadge}<span class="card-actions">${moreMenu}</span></div></article>`;
+    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}" data-spot-id="${spot.id}">${cover}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}${pendingTag}</h3></div><div class="card-meta">${metaLine}</div>${spotTags ? `<div class="spot-tags">${spotTags}</div>` : ""}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true" data-nav-id="${spot.id}">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button><span class="footer-stat">💬 ${spot.review_count || 0}</span>${hotBadge}<span class="card-actions">${moreMenu}</span></div></article>`;
   };
   spotList.innerHTML = list.length ? list.map(cardHTML).join("") : '<div class="empty-state">没有找到匹配的地点，换个关键词试试。</div>';
   document.querySelector("#pageInfo").textContent = `${state.page} / ${totalPages}`;
@@ -1052,14 +1046,21 @@ document.querySelector("#spotForm").addEventListener("submit", async (event) => 
   // 总共 ≤20MB、最多 10 张（与照片墙"单人单地点 9 张"上限对齐）
   const imageFiles = [...(form.querySelector('input[name="image"]').files || [])].slice(0, 10);
   if (imageFiles.reduce((sum, file) => sum + file.size, 0) > 20 * 1024 * 1024) { formMessage.textContent = "图片总共不能超过 20MB。"; return; }
+  // 子标签：预设选中 + 自定义输入，合计最多 5 个
+  const formTags = collectFormTags();
+  if (formTags === null) return;
   // client_token 用于离线重发的幂等：同一条提交重复发送只会被写入一次
-  const spot = { id: Date.now(), name: formData.get("name").trim(), address: formData.get("address").trim(), category: formData.get("category"), description: formData.get("description").trim(), lat: Number(formData.get("lat")), lng: Number(formData.get("lng")), image_url: "", status: "pending", client_token: crypto.randomUUID() };
+  const spot = { id: Date.now(), name: formData.get("name").trim(), address: formData.get("address").trim(), category: formData.get("category"), description: formData.get("description").trim(), lat: Number(formData.get("lat")), lng: Number(formData.get("lng")), image_url: "", status: "pending", client_token: crypto.randomUUID(), tags: formTags };
   if (!Number.isFinite(spot.lat) || !Number.isFinite(spot.lng) || spot.lat < 23.4 || spot.lat > 24.8 || spot.lng < 112.4 || spot.lng > 113.8) { formMessage.textContent = "请先搜索清远的地址或地点。"; return; }
   const saveSpotLocally = (imageURL = "") => { spot.image_url = imageURL; const submitted = getSubmittedSpots(); submitted.push(spot); localStorage.setItem("qingyuan-submissions", JSON.stringify(submitted)); state.filter = "all"; state.query = ""; state.page = 1; render(); };
   const restoreButton = () => { submitButton.disabled = false; submitButton.innerHTML = originalHTML; };
   const done = (message, savedLocally) => {
     formMessage.textContent = message;
     form.reset(); document.querySelector("input[name=lat]").value = ""; document.querySelector("input[name=lng]").value = "";
+    // 清理子标签选择状态
+    selectedTags.clear();
+    renderTagChips(formData.get("category"));
+    tagCustomInput.value = "";
     restoreButton();
     setTimeout(() => { modalBackdrop.hidden = true; formMessage.textContent = ""; showToast(savedLocally ? "已保存在本机，联网后自动同步" : "提交成功"); }, 1100);
     if (!savedLocally) loadPublicSpots();
@@ -1749,7 +1750,42 @@ document.querySelector("#authForm").addEventListener("submit", async (event) => 
   const message = document.querySelector("#authMessage"); message.textContent = "处理中……";
   try { const response = await apiFetch(`${API_BASE}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: data.username, password: data.password }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "请求失败"); localStorage.setItem(AUTH_TOKEN_KEY, payload.token); state.currentUser = payload.user; authBackdrop.hidden = true; updateAuthUI(); if (payload.mustChangePassword) { location.href = location.pathname + "?forceChange=1"; return; } await loadMaps(); showToast(`欢迎，${payload.user.nickname || payload.user.username}`); } catch (error) { message.textContent = error.message; }
 });
-document.querySelector("#mapForm").addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget; const name = new FormData(form).get("name"); try { const response = await apiFetch(`${API_BASE}/maps`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ name }) }); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload.error || "创建失败"); form.reset(); await loadMaps(); showToast(`私人地图“${payload.name}”已创建`); } catch (error) { showToast(error.message || "创建失败"); } });
+/* ---------------- 提交表单 · 子标签：分类下再细分自定义标签（美食有预设建议） ---------------- */
+const TAG_PRESETS = { food: ["早茶", "烧烤", "火锅", "小炒", "甜品", "夜宵", "粉面", "奶茶"] };
+const tagSection = document.querySelector("#tagSection");
+const tagChips = document.querySelector("#tagChips");
+const tagCustomInput = document.querySelector("#tagCustomInput");
+const selectedTags = new Set();
+
+function renderTagChips(category) {
+  const presets = TAG_PRESETS[category] || [];
+  tagChips.innerHTML = presets.length
+    ? presets.map((tag) => `<button type="button" class="tag-chip${selectedTags.has(tag) ? " on" : ""}" data-tag="${tag}">${tag}</button>`).join("")
+    : '<span class="field-note">该分类暂无建议标签，可直接在下方输入自定义标签</span>';
+  tagChips.querySelectorAll("button[data-tag]").forEach((button) => button.addEventListener("click", () => {
+    const tag = button.dataset.tag;
+    if (selectedTags.has(tag)) { selectedTags.delete(tag); button.classList.remove("on"); return; }
+    if (selectedTags.size >= 5) { showToast("最多选 5 个子标签"); return; }
+    selectedTags.add(tag);
+    button.classList.add("on");
+  }));
+}
+
+document.querySelector("select[name=category]").addEventListener("change", (event) => {
+  selectedTags.clear();
+  renderTagChips(event.target.value);
+});
+renderTagChips(document.querySelector("select[name=category]").value || "food");
+
+// 组装提交的子标签：选中的预设 + 自定义输入（逗号分隔），合计最多 5 个
+function collectFormTags() {
+  const custom = tagCustomInput.value.split(/[,，、\s]+/).map((tag) => tag.trim()).filter(Boolean);
+  const tags = [...new Set([...selectedTags, ...custom])];
+  if (tags.length > 5) { showToast("子标签最多 5 个"); return null; }
+  return tags;
+}
+
+document.querySelector("#mapForm").addEventListener("submit", async (event) => {
 // AI 生成私人地图：输入主题，模型从已上线点位中挑 2-8 个自动建图
 document.querySelector("#autoMapForm").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -1846,8 +1882,6 @@ function showDetailPanel() {
 // 进入详情前的高亮集合（如 AI 推荐的高亮），关闭详情时恢复
 let highlightBeforeDetail = null;
 function hideDetailPanel() {
-  stopPhotoAutoPlay();
-  closePhotoLightbox();
   detailPanel.hidden = true;
   if (introPanel) introPanel.hidden = false;
   state.highlightIds = highlightBeforeDetail || new Set();
@@ -1879,6 +1913,9 @@ function openSpotDetail(spotId) {
   if (detailPanel.hidden) highlightBeforeDetail = state.highlightIds;
   state.highlightIds = new Set([String(spot.id)]);
   renderMarkers();
+  // 地图同步弹出该点位的图钉信息窗（照片墙在弹窗里），与左侧详情联动
+  const marker = state.markers.find((m) => m.getTitle() === spot.name);
+  if (marker) marker.emit("click");
   const item = categories[spot.category] || categories.all;
   const image = document.querySelector("#detailImage");
   if (spot.image_url) { image.src = spot.image_url; image.hidden = false; image.alt = spot.name; } else { image.hidden = true; image.removeAttribute("src"); }
@@ -1891,6 +1928,9 @@ function openSpotDetail(spotId) {
   navigate.dataset.navId = spot.id;
   navigate.textContent = `⌖ ${spot.address || "地图上的目的地"} · 导航`;
   document.querySelector("#detailDescription").textContent = spot.description || "";
+  // 子标签展示在详情元信息区
+  const detailTags = parseSpotTagsClient(spot.tags);
+  document.querySelector("#detailTags").innerHTML = detailTags ? detailTags : "";
   document.querySelector("#ratingSummary").innerHTML = '<span class="field-note">评分加载中…</span>';
   document.querySelector("#reviewList").innerHTML = '<span class="field-note">点评加载中…</span>';
   document.querySelector("#reviewMessage").textContent = "";
@@ -1900,7 +1940,6 @@ function openSpotDetail(spotId) {
   // 补图区块：登录用户在详情页直接给点位追加照片
   document.querySelector("#detailPhotoBlock").hidden = !state.currentUser;
   document.querySelector("#detailWallImage").value = "";
-  renderDetailPhotoCarousel(spot.id);
   showDetailPanel();
   renderStarInput();
   setReviewStars(5);
@@ -2007,91 +2046,6 @@ async function deleteMyReview(reviewId) {
     showToast(error.message);
   }
 }
-
-/* ---------------- 详情页照片轮播（自动播放 + 触摸滑动）与点击放大灯箱 ---------------- */
-let detailPhotos = [];
-let detailPhotoIndex = 0;
-let detailPhotoTimer = null;
-
-function stopPhotoAutoPlay() { if (detailPhotoTimer) { clearInterval(detailPhotoTimer); detailPhotoTimer = null; } }
-function showDetailPhoto(index) {
-  if (!detailPhotos.length) return;
-  detailPhotoIndex = (index + detailPhotos.length) % detailPhotos.length;
-  document.querySelector("#detailPhotoTrack").style.transform = `translateX(-${detailPhotoIndex * 100}%)`;
-  document.querySelectorAll("#detailPhotoDots button").forEach((dot, i) => dot.classList.toggle("on", i === detailPhotoIndex));
-}
-
-async function renderDetailPhotoCarousel(spotId) {
-  stopPhotoAutoPlay();
-  detailPhotos = [];
-  detailPhotoIndex = 0;
-  const carousel = document.querySelector("#detailPhotoCarousel");
-  const empty = document.querySelector("#detailPhotoEmpty");
-  const dots = document.querySelector("#detailPhotoDots");
-  const track = document.querySelector("#detailPhotoTrack");
-  carousel.hidden = true;
-  empty.hidden = false;
-  empty.innerHTML = '<span class="field-note">照片加载中…</span>';
-  try {
-    const response = await apiFetch(`${API_BASE}/spots/${spotId}/photos`);
-    const payload = await response.json();
-    detailPhotos = (Array.isArray(payload.data) ? payload.data : []).map((photo) => photo.url);
-  } catch { /* 加载失败按无照片处理，不影响补图 */ }
-  if (!detailPhotos.length) { empty.innerHTML = '<span class="field-note">还没有照片，来传第一张</span>'; return; }
-  empty.hidden = true;
-  carousel.hidden = false;
-  track.innerHTML = detailPhotos.map((url) => `<img src="${escapeHTML(url)}" alt="社区照片" data-lightbox-index="${detailPhotos.indexOf(url)}">`).join("");
-  dots.innerHTML = detailPhotos.map((_, index) => `<button type="button" data-dot="${index}" aria-label="第 ${index + 1} 张"></button>`).join("");
-  dots.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => showDetailPhoto(Number(button.dataset.dot))));
-  showDetailPhoto(0);
-  // 自动轮播：4 秒一张；触摸滑动切换（手机直接划）
-  detailPhotoTimer = setInterval(() => showDetailPhoto(detailPhotoIndex + 1), 4000);
-}
-
-document.querySelector("#detailPhotoPrev").addEventListener("click", () => { stopPhotoAutoPlay(); showDetailPhoto(detailPhotoIndex - 1); });
-document.querySelector("#detailPhotoNext").addEventListener("click", () => { stopPhotoAutoPlay(); showDetailPhoto(detailPhotoIndex + 1); });
-// 点击照片打开灯箱放大查看
-document.querySelector("#detailPhotoTrack").addEventListener("click", (event) => {
-  const img = event.target.closest("img");
-  if (!img) return;
-  stopPhotoAutoPlay();
-  openPhotoLightbox(Number(img.dataset.lightboxIndex) || detailPhotoIndex);
-});
-// 触摸滑动：左右划切换
-(() => {
-  const carousel = document.querySelector("#detailPhotoCarousel");
-  let startX = 0;
-  carousel.addEventListener("touchstart", (event) => { startX = event.touches[0].clientX; }, { passive: true });
-  carousel.addEventListener("touchend", (event) => {
-    const dx = event.changedTouches[0].clientX - startX;
-    if (Math.abs(dx) > 40) { stopPhotoAutoPlay(); showDetailPhoto(detailPhotoIndex + (dx < 0 ? 1 : -1)); }
-  }, { passive: true });
-})();
-
-/* ---------------- 灯箱：全屏放大查看，左右切换，Esc / 点空白关闭 ---------------- */
-const photoLightbox = document.querySelector("#photoLightbox");
-let lightboxIndex = 0;
-
-function openPhotoLightbox(index) {
-  if (!detailPhotos.length) return;
-  lightboxIndex = index;
-  updateLightbox();
-  photoLightbox.hidden = false;
-}
-function updateLightbox() {
-  if (photoLightbox.hidden) return;
-  document.querySelector("#lightboxImage").src = detailPhotos[lightboxIndex] || "";
-  document.querySelector("#lightboxCount").textContent = `${lightboxIndex + 1} / ${detailPhotos.length}`;
-  const single = detailPhotos.length < 2;
-  document.querySelector("#lightboxPrev").hidden = single;
-  document.querySelector("#lightboxNext").hidden = single;
-}
-function closePhotoLightbox() { photoLightbox.hidden = true; document.querySelector("#lightboxImage").src = ""; }
-
-document.querySelector("#closeLightboxButton").addEventListener("click", closePhotoLightbox);
-photoLightbox.addEventListener("click", (event) => { if (event.target === photoLightbox) closePhotoLightbox(); });
-document.querySelector("#lightboxPrev").addEventListener("click", () => { lightboxIndex = (lightboxIndex - 1 + detailPhotos.length) % detailPhotos.length; updateLightbox(); });
-document.querySelector("#lightboxNext").addEventListener("click", () => { lightboxIndex = (lightboxIndex + 1) % detailPhotos.length; updateLightbox(); });
 
 document.querySelector("#reviewLoginButton").addEventListener("click", openAuth);
 // 详情页补图：与编辑弹窗的补图同一后端流程（uploads → 照片墙追加）
@@ -2224,8 +2178,6 @@ document.querySelector("#settingsForm").addEventListener("submit", async (event)
 // Esc 关闭点评相关弹窗
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
-  // 灯箱开着时 Esc 只关灯箱（优先级高于详情面板）
-  if (!photoLightbox.hidden) { closePhotoLightbox(); return; }
   hideDetailPanel();
   profileBackdrop.hidden = true;
   settingsBackdrop.hidden = true;

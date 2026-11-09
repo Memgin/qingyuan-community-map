@@ -168,7 +168,7 @@ async function listSpots(request, url, env) {
   const count = await env.DB.prepare(`SELECT COUNT(*) AS total FROM spots WHERE ${where}`).bind(...bindings).first();
   const columns = fields === "map" ? "id, name, category, lat, lng, address, description, image_url" : "id, name, address, category, description, lat, lng, image_url, likes, created_at";
   // 列表附带评分聚合与综合热度分；reviews/nav_count 未迁移时自动降级为无这些字段
-  const ratingColumns = `, (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.spot_id = spots.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.spot_id = spots.id) AS review_count, ${hotExpression} AS hot_score`;
+  const ratingColumns = `, (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.spot_id = spots.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.spot_id = spots.id) AS review_count, ${hotExpression} AS hot_score, spots.tags AS tags`;
   let rows;
   try {
     rows = await env.DB.prepare(`SELECT ${columns}${ratingColumns} FROM spots WHERE ${where} ${orderClause} LIMIT ? OFFSET ?`).bind(...bindings, limit, (page - 1) * limit).all();
@@ -220,6 +220,10 @@ async function createSpot(request, env) {
   const lng = verified && verification.corrected ? verification.corrected.lng : spot.value.lng;
   const result = await env.DB.prepare("INSERT INTO spots (name, address, category, description, lat, lng, image_url, status, owner_token, user_id, client_token, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)")
     .bind(spot.value.name, spot.value.address, spot.value.category, spot.value.description, lat, lng, spot.value.image_url || null, status, ownerToken, user.id, clientToken).run();
+  // 子标签单独写入：tags 列未迁移的旧库不影响主流程提交
+  if (spot.value.tags && spot.value.tags !== "[]") {
+    await env.DB.prepare("UPDATE spots SET tags = ? WHERE id = ?").bind(spot.value.tags, result.meta.last_row_id).run().catch(() => null);
+  }
   return json({ id: result.meta.last_row_id, status, verified, autocheck: verification.note, message: verified ? "地址和地点已核验，已自动通过" : "提交成功，等待人工审核" }, verified ? 201 : 202, env);
 }
 
@@ -926,7 +930,16 @@ async function updateOwnSpot(request, env, id) {
     updates.image_url = url;
   }
   const keys = Object.keys(updates);
-  if (!keys.length) return json({ error: "没有需要更新的内容" }, 400, env);
+  // 子标签单独写：tags 列未迁移的旧库不影响其余字段更新
+  if (body.tags !== undefined) {
+    const tagList = parseSpotTags(body.tags);
+    if (body.tags !== null && !tagList) return json({ error: "子标签格式无效（最多 5 个，每个不超过 10 字）" }, 400, env);
+    await env.DB.prepare("UPDATE spots SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(JSON.stringify(tagList || []), id).run().catch(() => null);
+  }
+  if (!keys.length) {
+    if (body.tags !== undefined) return json({ id, updated: true }, 200, env);
+    return json({ error: "没有需要更新的内容" }, 400, env);
+  }
   await env.DB.prepare(`UPDATE spots SET ${keys.map((key) => `${key} = ?`).join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...keys.map((key) => updates[key]), id).run();
   return json({ id, updated: keys }, 200, env);
 }
@@ -1657,12 +1670,15 @@ function validateSpot(body) {
   const lat = Number(body.lat); const lng = Number(body.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < 23.4 || lat > 24.8 || lng < 112.4 || lng > 113.8) return { ok: false, error: "坐标不在清远范围内" };
   if (typeof body.address !== "string" || body.address.trim().length < 2 || body.address.length > 120) return { ok: false, error: "请提供有效的地址" };
+  // 子标签：数组或逗号分隔字符串，最多 5 个、每个 ≤10 字，去重去空
+  const tagList = parseSpotTags(body.tags);
+  if (body.tags !== undefined && body.tags !== null && !tagList) return { ok: false, error: "子标签格式无效（最多 5 个，每个不超过 10 字）" };
   const rawImageUrl = typeof body.image_url === "string" ? body.image_url.trim() : "";
   // 图片地址只允许本项目上传生成的 /api/images/ 路径（归一化后入库），避免提交外链 URL 后被
   // 直接渲染成 <img>，造成访问追踪、盗链或违规图片注入（照片墙已采用同样规则）
   const imageUrl = rawImageUrl ? normalizeImageURL(rawImageUrl) : "";
   if (rawImageUrl && !imageUrl) return { ok: false, error: "图片地址无效，请重新上传图片后再提交" };
-  return { ok: true, value: { name: body.name.trim(), address: body.address.trim(), category: body.category, description: body.description.trim(), lat, lng, image_url: imageUrl } };
+  return { ok: true, value: { name: body.name.trim(), address: body.address.trim(), category: body.category, description: body.description.trim(), lat, lng, image_url: imageUrl, tags: tagList ? JSON.stringify(tagList) : "[]" } };
 }
 
 // 归一化图片地址：/api/uploads 返回的是含域名的绝对 URL，此处提取出
@@ -1674,6 +1690,19 @@ function normalizeImageURL(raw) {
   if (index === -1) return null;
   const path = url.slice(index);
   return /^\/api\/images\/[\w./-]+$/.test(path) ? path : null;
+}
+
+// 子标签解析：接受数组或逗号分隔字符串，净化后最多 5 个、每个 ≤10 字；
+// 格式无效（非数组/字符串或超量）返回 null 交由调用方拒绝
+function parseSpotTags(raw) {
+  if (raw === undefined || raw === null || raw === "") return [];
+  let list = [];
+  if (Array.isArray(raw)) list = raw;
+  else if (typeof raw === "string") list = raw.split(/[,，、\s]+/);
+  else return null;
+  const cleaned = [...new Set(list.map((tag) => sanitizeForPrompt(tag, 10).trim()).filter(Boolean))];
+  if (!cleaned.length) return [];
+  return cleaned.length > 5 ? null : cleaned;
 }
 
 function normalizeName(value) { return String(value).replace(/[·\s（）()\-]/g, "").toLowerCase(); }

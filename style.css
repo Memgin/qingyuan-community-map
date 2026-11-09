@@ -304,6 +304,14 @@ button { cursor: pointer; }
 .map-pick-create { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .map-pick-create input { margin-top: 0; flex: 1; min-width: 0; }
 
+/* 子标签：分类下的细分自定义标签（提交表单选择区 + 卡片/弹窗/详情展示） */
+.tag-section { margin: 12px 0; }
+.tag-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.tag-chips .tag-chip { border: 1px solid rgba(25,43,42,.25); background: #fffdf6; padding: 5px 11px; font-size: 11px; color: var(--ink); cursor: pointer; }
+.tag-chips .tag-chip.on { background: var(--green); border-color: var(--green); color: #fff; }
+.spot-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0; }
+.spot-tags .tag-chip { padding: 2px 8px; background: rgba(47,109,90,.1); color: var(--green); font-size: 10px; font-weight: 700; }
+
 /* 详情页补图区块 */
 .detail-photo { margin-top: 12px; }
 .detail-photo-title { margin: 0 0 8px; color: var(--ink); font-size: 12px; font-weight: 700; }

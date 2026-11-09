@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261102-37">
+  <link rel="stylesheet" href="style.css?v=20261102-38">
 </head>
 <body>
   <main class="app-shell">
@@ -36,18 +36,12 @@
       <img id="detailImage" class="detail-image" alt="" hidden>
       <h2 id="detailTitle"></h2>
       <p class="detail-meta"><span id="detailCategory" class="category-tag"></span></p>
+      <div id="detailTags" class="spot-tags"></div>
       <a id="detailNavigate" class="spot-address navigate-link" target="_blank" rel="noopener"></a>
       <p id="detailDescription" class="detail-description"></p>
       <div class="rating-summary" id="ratingSummary"><span class="field-note">评分加载中…</span></div>
       <div class="detail-photo" id="detailPhotoBlock" hidden>
-        <p class="detail-photo-title">📷 社区照片（追加式，不会覆盖他人的图）</p>
-        <div id="detailPhotoCarousel" class="photo-carousel" hidden>
-          <div class="photo-carousel-track" id="detailPhotoTrack"></div>
-          <button class="carousel-nav prev" id="detailPhotoPrev" type="button" aria-label="上一张">‹</button>
-          <button class="carousel-nav next" id="detailPhotoNext" type="button" aria-label="下一张">›</button>
-          <div class="carousel-dots" id="detailPhotoDots"></div>
-        </div>
-        <div id="detailPhotoEmpty" hidden><span class="field-note">还没有照片，来传第一张</span></div>
+        <p class="detail-photo-title">📷 补充社区照片（上传后在地图弹窗中查看）</p>
         <div class="detail-photo-form"><input type="file" id="detailWallImage" accept="image/jpeg,image/png,image/webp"><button class="primary-button" id="detailUploadPhotoButton" type="button">上传照片</button></div>
       </div>
       <h3 class="review-section-title">全部点评</h3>
@@ -73,14 +67,6 @@
       <div class="route-editor-add"><select id="routeEditorAddSelect"></select><button class="text-button" id="routeEditorAddButton" type="button">+ 添加点位</button></div>
       <button class="primary-button full-width" id="saveRouteEditorButton" type="button">保存路线</button>
     </section>
-
-    <div class="photo-lightbox" id="photoLightbox" hidden>
-      <button class="lightbox-close" id="closeLightboxButton" type="button" aria-label="关闭">×</button>
-      <button class="lightbox-nav prev" id="lightboxPrev" type="button" aria-label="上一张">‹</button>
-      <img id="lightboxImage" src="" alt="照片放大查看">
-      <button class="lightbox-nav next" id="lightboxNext" type="button" aria-label="下一张">›</button>
-      <div class="lightbox-count" id="lightboxCount"></div>
-    </div>
 
     <section class="map-panel" aria-label="清远地图">
       <div id="map"></div>
@@ -195,6 +181,16 @@
         <label>搜索地址或地点<input id="addressInput" name="address" type="search" placeholder="例如：清远站、飞来湖公园" required><button class="address-search-button" id="addressSearchButton" type="button">搜索并定位</button></label>
         <p id="addressMessage" class="form-message" role="status"></p>
         <label>地点分类<select name="category" required><option value="scenic">景点</option><option value="food">美食</option><option value="shopping">商圈</option><option value="medical">医疗</option><option value="school">学校</option><option value="transit">车站</option></select></label>
+        <div id="tagSection" class="tag-section">
+          <label class="map-form-label">子标签（可选，最多 5 个，让同类地点更易被找到）</label>
+          <div id="tagChips" class="tag-chips"></div>
+          <input id="tagCustomInput" type="text" placeholder="或自定义标签，多个用逗号分隔" maxlength="60">
+        </div>
+        <div id="tagSection" class="tag-section">
+          <label class="map-form-label">子标签（可选，最多 5 个，让同类地点更易被找到）</label>
+          <div id="tagChips" class="tag-chips"></div>
+          <input id="tagCustomInput" type="text" placeholder="或自定义标签，多个用逗号分隔" maxlength="60">
+        </div>
         <label>一句话介绍<textarea name="description" rows="3" maxlength="120" placeholder="说说这里为什么值得来……" required></textarea></label>
         <label>地点图片<input name="image" type="file" accept="image/jpeg,image/png,image/webp" multiple><small class="field-note">可选，最多 10 张、总共最大 20MB；第一张将作为封面</small></label>
         <input name="lat" type="hidden" value=""><input name="lng" type="hidden" value="">
@@ -271,6 +267,6 @@
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
   <script src="demo-data.js?v=20261102-1"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/simple-liquid-glass@5.6.0/dist/web-component.esm.js"></script>
-  <script src="app.js?v=20261102-49"></script>
+  <script src="app.js?v=20261102-50"></script>
 </body>
 </html>
