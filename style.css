@@ -304,6 +304,13 @@ button { cursor: pointer; }
 .map-pick-create { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .map-pick-create input { margin-top: 0; flex: 1; min-width: 0; }
 
+/* 详情页补图区块 */
+.detail-photo { margin-top: 12px; }
+.detail-photo-title { margin: 0 0 8px; color: var(--ink); font-size: 12px; font-weight: 700; }
+.detail-photo-form { display: flex; align-items: center; gap: 10px; }
+.detail-photo-form input[type="file"] { flex: 1; min-width: 0; margin: 0; font-size: 11px; }
+.detail-photo-form .primary-button { flex: 0 0 auto; white-space: nowrap; }
+
 /* 路线编辑器：站点清单（↑↓调序/移除）+ 添加点位 */
 .route-editor-list { display: grid; gap: 8px; }
 .route-editor-add { display: flex; align-items: center; gap: 10px; margin: 10px 0 14px; }

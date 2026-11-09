@@ -1151,6 +1151,14 @@ async function refreshPhotoWall(spotId) {
   }
 }
 
+// 照片墙追加公共函数：照片已上传（/api/uploads）后提交到点位照片墙
+async function requestPhotoAppend(spotId, url) {
+  const response = await fetch(`${API_BASE}/spots/${spotId}/photos`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ url }) });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || "照片提交失败");
+  return payload;
+}
+
 document.querySelector("#addWallPhotoButton").addEventListener("click", async () => {
   if (!editingSpotId) return;
   const file = document.querySelector("#editWallImage").files[0];
@@ -1162,9 +1170,7 @@ document.querySelector("#addWallPhotoButton").addEventListener("click", async ()
     const uploadResponse = await fetch(`${API_BASE}/uploads`, { method: "POST", headers: authHeaders({ "Content-Type": file.type }), body: file });
     const uploadPayload = await uploadResponse.json().catch(() => ({}));
     if (!uploadResponse.ok) throw new Error(uploadPayload.error || "图片上传失败");
-    const response = await fetch(`${API_BASE}/spots/${editingSpotId}/photos`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ url: uploadPayload.url }) });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || "照片提交失败");
+    await requestPhotoAppend(editingSpotId, uploadPayload.url);
     document.querySelector("#editWallImage").value = "";
     showToast("照片已补充到点位");
     await refreshPhotoWall(editingSpotId);
@@ -1889,6 +1895,9 @@ function openSpotDetail(spotId) {
   // 表单可见性：未登录提示登录；登录则展示（提交逻辑里会预填我的点评）
   document.querySelector("#reviewForm").hidden = !state.currentUser;
   document.querySelector("#reviewLoginHint").hidden = Boolean(state.currentUser);
+  // 补图区块：登录用户在详情页直接给点位追加照片
+  document.querySelector("#detailPhotoBlock").hidden = !state.currentUser;
+  document.querySelector("#detailWallImage").value = "";
   showDetailPanel();
   renderStarInput();
   setReviewStars(5);
@@ -1997,6 +2006,28 @@ async function deleteMyReview(reviewId) {
 }
 
 document.querySelector("#reviewLoginButton").addEventListener("click", openAuth);
+// 详情页补图：与编辑弹窗的补图同一后端流程（uploads → 照片墙追加）
+document.querySelector("#detailUploadPhotoButton").addEventListener("click", async () => {
+  if (!state.currentUser) { openAuth(); return; }
+  if (!detailSpotId) return;
+  const file = document.querySelector("#detailWallImage").files[0];
+  if (!file) { showToast("请先选择一张照片"); return; }
+  if (file.size > 20 * 1024 * 1024) { showToast("单张图片不能超过 20MB"); return; }
+  const button = document.querySelector("#detailUploadPhotoButton");
+  button.disabled = true; button.textContent = "上传中…";
+  try {
+    const uploadResponse = await fetch(`${API_BASE}/uploads`, { method: "POST", headers: authHeaders({ "Content-Type": file.type }), body: file });
+    const uploadPayload = await uploadResponse.json().catch(() => ({}));
+    if (!uploadResponse.ok) throw new Error(uploadPayload.error || "图片上传失败");
+    await requestPhotoAppend(detailSpotId, uploadPayload.url);
+    document.querySelector("#detailWallImage").value = "";
+    showToast("照片已补充到点位");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    button.disabled = false; button.textContent = "上传照片";
+  }
+});
 document.querySelector("#closeDetailButton").addEventListener("click", hideDetailPanel);
 
 /* ---------------- 用户公开主页（点击实名点评头像进入） ---------------- */
