@@ -525,7 +525,7 @@ function navigationURL(spot) {
 
 function markerIcon(category, highlighted = false) {
   const item = categories[category];
-  return `<div class="marker-pin ${highlighted ? "is-highlight" : ""}" style="--marker-color:${item.color}"><iconify-icon icon="${item.icon}" inline></iconify-icon></div>`;
+  return `<div class="marker-pin ${highlighted ? "is-highlight" : ""}" style="--marker-color:${item.color}"><span class="marker-pin-body"><iconify-icon icon="${item.icon}" inline></iconify-icon></span></div>`;
 }
 
 // 把 AI 推荐到的点位在地图上高亮，并自动缩放到这些点
@@ -785,7 +785,7 @@ function parseSpotTagsClient(raw) {
 function renderMarkers() {
   state.markers.forEach((marker) => marker.setMap(null));
   state.markers = visibleSpots().map((spot) => {
-    const marker = new AMap.Marker({ position: [spot.lng, spot.lat], content: markerIcon(spot.category, state.highlightIds.has(String(spot.id))), offset: new AMap.Pixel(-14, -29), title: spot.name });
+    const marker = new AMap.Marker({ position: [spot.lng, spot.lat], content: markerIcon(spot.category, state.highlightIds.has(String(spot.id))), offset: new AMap.Pixel(-18, -44), title: spot.name });
     marker.setMap(map);
     marker.on("click", () => {
       const infoWindow = new AMap.InfoWindow({ content: popupContentHTML(spot), offset: new AMap.Pixel(0, -35), closeWhenClickMap: true });
@@ -1584,8 +1584,8 @@ function searchEmergencyFacilities(key) {
     pois.forEach((poi) => {
       const marker = new AMap.Marker({
         position: [poi.location.lng, poi.location.lat],
-        content: `<div class="marker-pin" style="--marker-color:${category.color}">${category.icon}</div>`,
-        offset: new AMap.Pixel(-13, -40),
+        content: `<div class="marker-pin"><span class="marker-pin-body" style="--marker-color:${category.color}"><iconify-icon icon="${category.icon}" inline></iconify-icon></span></div>`,
+        offset: new AMap.Pixel(-18, -44),
         title: poi.name
       });
       map.add(marker);

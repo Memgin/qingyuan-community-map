@@ -224,7 +224,8 @@ button { cursor: pointer; }
   .search-box { width: 100%; }
 }
 
-/* ---------------- 苹果风组件刷新（叠加覆盖，统一圆角/阴影/交互质感） ---------------- */
+/* ---------------- 苹果风组件刷新（叠加覆盖，统一圆角/阴影/交互质感） ----------------
+   注意：.marker-pin 旧规则（长行内）已被末尾新体系覆盖，勿在此处重复定义 */
 .spot-card { border-radius: var(--radius-m); box-shadow: var(--shadow); border-color: transparent; }
 .spot-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lift); }
 .modal { border-radius: var(--radius-l); box-shadow: var(--shadow-lift); }
@@ -254,6 +255,32 @@ input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 3px rgba(47,109,90
 .sk-line.w60 { width: 60%; }
 .sk-line.w80 { width: 80%; }
 @keyframes sk-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+/* ---------------- 地图图钉（Google Maps 风格）：圆头 + 正下尖角 + 落地投影 + 高亮脉冲 ----------------
+   覆盖长行内的旧 .marker-pin 规则；新结构：容器(.marker-pin) > 圆头(.marker-pin-body 含图标+尖角) */
+.marker-pin { position: relative; width: 36px; height: 44px; }
+.marker-pin-body {
+  position: relative; z-index: 1;
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+  background: var(--marker-color);
+  border: 2.5px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 5px 12px rgba(0, 0, 0, .28);
+  transition: transform .18s;
+}
+.marker-pin-body iconify-icon { font-size: 17px; color: #fff; }
+/* 尖角：圆底下缘中央的三角形，尖端对准真实点位 */
+.marker-pin-body::after { content: ""; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); border: 9px solid transparent; border-top-color: var(--marker-color); border-bottom: 0; }
+/* 落地投影：图钉下方椭圆暗影，增强空间感 */
+.marker-pin::before { content: ""; position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); width: 20px; height: 6px; border-radius: 50%; background: rgba(0, 0, 0, .2); filter: blur(1.5px); }
+/* 高亮态：珊瑚色脉冲光环 + 轻微放大 */
+.marker-pin.is-highlight { z-index: 300; }
+.marker-pin.is-highlight .marker-pin-body {
+  box-shadow: 0 0 0 3px rgba(235, 118, 94, .55), 0 5px 14px rgba(0, 0, 0, .3);
+  animation: pin-pulse 1.6s ease-in-out infinite;
+}
+@keyframes pin-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
 
 /* 季节推荐：应季主题快捷入口（复用 AI 推荐接口，占整行排成一排） */
 .season-chips { display: flex; flex-wrap: wrap; gap: 8px; flex-basis: 100%; margin-top: 4px; }
