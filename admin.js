@@ -8,6 +8,28 @@ const statusFilter = document.querySelector("#statusFilter");
 const categoryChips = document.querySelector("#categoryChips");
 // 管理列表里分类 key 显示为中文（与前台「全部地点」页的分类色一致）
 const CATEGORY_LABELS = { scenic: "景点", food: "美食", shopping: "商圈", medical: "医疗", school: "校园", transit: "交通" };
+const CATEGORY_COLORS = { scenic: "#5995A8", food: "#EB765E", shopping: "#B4778E", medical: "#68A678", school: "#6F7FC0", transit: "#D39A47" };
+// 数据概览图表（Chart.js）：分类分布 + 热度 Top 10，随点位数据加载后刷新
+let chartCategories = null;
+let chartHot = null;
+function renderAdminCharts(spots) {
+  if (typeof Chart === "undefined" || !spots?.length) return;
+  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+  const catCanvas = document.querySelector("#chartCategories");
+  const hotCanvas = document.querySelector("#chartHot");
+  if (catCanvas) {
+    const counts = Object.keys(CATEGORY_LABELS).map((key) => spots.filter((spot) => spot.category === key).length);
+    const data = { labels: Object.values(CATEGORY_LABELS), datasets: [{ data: counts, backgroundColor: Object.values(CATEGORY_COLORS), borderRadius: 8 }] };
+    if (chartCategories) chartCategories.destroy();
+    chartCategories = new Chart(catCanvas, { type: "bar", data, options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
+  }
+  if (hotCanvas) {
+    const top = [...spots].sort((a, b) => Number(b.hot_score || 0) - Number(a.hot_score || 0)).slice(0, 10);
+    const data = { labels: top.map((spot) => spot.name), datasets: [{ data: top.map((spot) => Number(spot.hot_score || 0)), backgroundColor: "#EB765E", borderRadius: 8 }] };
+    if (chartHot) chartHot.destroy();
+    chartHot = new Chart(hotCanvas, { type: "bar", data, options: { indexAxis: "y", responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (item) => `热度 ${item.raw}` } } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } } });
+  }
+}
 const ADMIN_CATEGORIES = [
   { key: "", label: "全部", color: "#2F6D5A" },
   { key: "scenic", label: "景点", color: "#5995A8" },
@@ -186,6 +208,7 @@ async function loadAllSpots() {
     if (statusFilter.value) params.set("status", statusFilter.value);
     if (selectedCategory) params.set("category", selectedCategory);
     const payload = await request(`/admin/spots/all?${params}`);
+    renderAdminCharts(payload.data);
     const categoryOptions = (spot) => ADMIN_CATEGORIES.filter((item) => item.key).map((item) => `<option value="${item.key}"${spot.category === item.key ? " selected" : ""}>${item.label}</option>`).join("");
     // 表格化布局：分类下拉选择即保存（无需单独按钮），状态用彩色胶囊标签
     allSpotsList.innerHTML = payload.data.length ? `<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>地点</th><th>状态</th><th>分类</th><th>点赞</th><th>加入时间</th><th>操作</th></tr></thead><tbody>${payload.data.map((spot) => `<tr>

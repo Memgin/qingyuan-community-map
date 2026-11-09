@@ -9,7 +9,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261102-38">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css">
+  <link rel="stylesheet" href="style.css?v=20261109-39">
+  <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js"></script>
 </head>
 <body>
   <main class="app-shell">
@@ -41,7 +43,7 @@
       <p id="detailDescription" class="detail-description"></p>
       <div class="rating-summary" id="ratingSummary"><span class="field-note">评分加载中…</span></div>
       <div class="detail-photo" id="detailPhotoBlock" hidden>
-        <p class="detail-photo-title">📷 社区照片（追加式，不会覆盖他人的图）</p>
+        <p class="detail-photo-title"><iconify-icon icon="ph:camera" inline></iconify-icon> 社区照片（追加式，不会覆盖他人的图）</p>
         <div id="detailPhotoCarousel" class="photo-carousel" hidden>
           <div class="photo-carousel-track" id="detailPhotoTrack"></div>
           <button class="carousel-nav prev" id="detailPhotoPrev" type="button" aria-label="上一张">‹</button>
@@ -75,6 +77,14 @@
       <button class="primary-button full-width" id="saveRouteEditorButton" type="button">保存路线</button>
     </section>
 
+    <div class="photo-lightbox" id="photoLightbox" hidden>
+      <button class="lightbox-close" id="closeLightboxButton" type="button" aria-label="关闭">×</button>
+      <button class="lightbox-nav prev" id="lightboxPrev" type="button" aria-label="上一张">‹</button>
+      <img id="lightboxImage" src="" alt="照片放大查看">
+      <button class="lightbox-nav next" id="lightboxNext" type="button" aria-label="下一张">›</button>
+      <div class="lightbox-count" id="lightboxCount"></div>
+    </div>
+
     <section class="map-panel" aria-label="清远地图">
       <div id="map"></div>
       <div class="map-toolbar">
@@ -96,17 +106,17 @@
       <div id="seasonChips" class="season-chips"></div>
       <p id="recommendResult" class="recommend-result" role="status"></p>
       <p id="routeOrder" class="recommend-result" hidden></p>
-      <button class="text-button" id="routeEditorButton" type="button" hidden>✏️ 编辑路线</button>
-      <button class="text-button" id="clearRouteButton" type="button" hidden>🧹 清除推荐路线</button>
+      <button class="text-button" id="routeEditorButton" type="button" hidden><iconify-icon icon="ph:pencil-simple" inline></iconify-icon> 编辑路线</button>
+      <button class="text-button" id="clearRouteButton" type="button" hidden><iconify-icon icon="ph:broom" inline></iconify-icon> 清除推荐路线</button>
       <div id="guideMap" class="guide-map"></div>
     </section>
     <section class="private-panel" id="privatePanel" hidden>
       <div><p class="eyebrow">PRIVATE MAPS / 03</p><h2>我的私人地图</h2></div>
       <form id="mapForm"><label class="map-form-label" for="mapNameInput">第一步 · 给地图起个名字</label><input id="mapNameInput" name="name" type="text" placeholder="例如：周末遛娃、北江美食巡礼" maxlength="40" required><button class="primary-button" type="submit">创建地图 <span>+</span></button></form>
       <p class="map-form-hint">第二步 · 到上方「热门地点」的卡片上点「收藏」，把喜欢的点位加进这张地图</p>
-      <form id="autoMapForm" class="auto-map-form"><label class="map-form-label" for="autoThemeInput">不想自己挑？</label><input id="autoThemeInput" name="theme" type="text" placeholder="输入主题，例如：适合带爸妈的周末" maxlength="200" required><button class="primary-button" type="submit">AI 挑地点建图 ✦</button></form>
+      <form id="autoMapForm" class="auto-map-form"><label class="map-form-label" for="autoThemeInput">不想自己挑？</label><input id="autoThemeInput" name="theme" type="text" placeholder="输入主题，例如：适合带爸妈的周末" maxlength="200" required><button class="primary-button" type="submit"><iconify-icon icon="ph:sparkle" inline></iconify-icon> AI 挑地点建图</button></form>
       <div id="privateMapList" class="private-map-list"></div>
-      <button id="trashToggleButton" class="text-button trash-toggle" type="button">🗑 最近删除（保留 30 天）</button>
+      <button id="trashToggleButton" class="text-button trash-toggle" type="button"><iconify-icon icon="ph:trash" inline></iconify-icon> 最近删除（保留 30 天）</button>
       <div id="privateMapDetail" class="private-map-detail" hidden></div>
     </section>
   </main>
@@ -130,20 +140,20 @@
       <h2 id="emergencyTitle">附近应急设施 & 一键求助</h2>
       <p class="modal-intro" id="emergencyLocateStatus">正在获取定位……</p>
       <div class="emergency-categories">
-        <button data-ekey="police" type="button">🚓 警察局</button>
-        <button data-ekey="hospital" type="button">🏥 医院</button>
-        <button data-ekey="fire" type="button">🚒 消防</button>
-        <button data-ekey="shelter" type="button">🏕 避难所</button>
+        <button data-ekey="police" type="button"><iconify-icon icon="ph:police-car" inline></iconify-icon> 警察局</button>
+        <button data-ekey="hospital" type="button"><iconify-icon icon="ph:hospital" inline></iconify-icon> 医院</button>
+        <button data-ekey="fire" type="button"><iconify-icon icon="ph:fire-truck" inline></iconify-icon> 消防</button>
+        <button data-ekey="shelter" type="button"><iconify-icon icon="ph:house-line" inline></iconify-icon> 避难所</button>
       </div>
       <div id="emergencyResults" class="emergency-results"><p class="field-note">点上面的分类，搜索你附近 3 公里内的应急设施。</p></div>
       <div class="emergency-sos">
         <p class="private-map-detail-title"><span>一键求助（定位链接自动附带）</span></p>
         <textarea id="sosText" readonly></textarea>
         <div class="sos-actions">
-          <button id="copySosButton" type="button">📋 复制求救信息</button>
-          <a href="tel:110">📞 110 报警</a>
-          <a href="tel:120">📞 120 急救</a>
-          <a href="tel:119">📞 119 火警</a>
+          <button id="copySosButton" type="button"><iconify-icon icon="ph:copy" inline></iconify-icon> 复制求救信息</button>
+          <a href="tel:110"><iconify-icon icon="ph:phone" inline></iconify-icon> 110 报警</a>
+          <a href="tel:120"><iconify-icon icon="ph:phone" inline></iconify-icon> 120 急救</a>
+          <a href="tel:119"><iconify-icon icon="ph:phone" inline></iconify-icon> 119 火警</a>
         </div>
         <div id="contactList" class="emergency-contacts"></div>
         <div class="collab-add"><input id="contactName" type="text" placeholder="联系人称呼" maxlength="20"><input id="contactPhone" type="text" placeholder="手机号" maxlength="15"><button class="text-button" id="addContactButton" type="button">添加联系人 +</button></div>
@@ -151,7 +161,7 @@
     </section>
   </div>
 
-  <button id="emergencyButton" class="emergency-button" type="button">🚨 应急</button>
+  <button id="emergencyButton" class="emergency-button" type="button"><iconify-icon icon="ph:siren" inline></iconify-icon> 应急</button>
 
   <div class="modal-backdrop" id="editBackdrop" hidden>
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
@@ -274,6 +284,6 @@
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
   <script src="demo-data.js?v=20261102-1"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/simple-liquid-glass@5.6.0/dist/web-component.esm.js"></script>
-  <script src="app.js?v=20261102-50"></script>
+  <script src="app.js?v=20261102-51"></script>
 </body>
 </html>

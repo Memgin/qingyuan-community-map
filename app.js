@@ -1,11 +1,11 @@
 const categories = {
-  all: { label: "全部", color: "#2f6d5a", icon: "✦" },
-  scenic: { label: "景点", color: "#5995a8", icon: "山" },
-  food: { label: "美食", color: "#eb765e", icon: "食" },
-  shopping: { label: "商圈", color: "#b4778e", icon: "逛" },
-  medical: { label: "医疗", color: "#68a678", icon: "医" },
-  school: { label: "学校", color: "#6f7fc0", icon: "校" },
-  transit: { label: "车站", color: "#d39a47", icon: "行" }
+  all: { label: "全部", color: "#2f6d5a", icon: "ph:sparkle" },
+  scenic: { label: "景点", color: "#5995a8", icon: "ph:mountains" },
+  food: { label: "美食", color: "#eb765e", icon: "ph:fork-knife" },
+  shopping: { label: "商圈", color: "#b4778e", icon: "ph:storefront" },
+  medical: { label: "医疗", color: "#68a678", icon: "ph:first-aid-kit" },
+  school: { label: "学校", color: "#6f7fc0", icon: "ph:graduation-cap" },
+  transit: { label: "车站", color: "#d39a47", icon: "ph:bus" }
 };
 
 // 演示用默认点位已于 2026-10-10 移除：页面只展示数据库里真实收录的点位。
@@ -342,7 +342,16 @@ async function loadMapSpots() {
 }
 
 // 列表使用后端真分页：只取当前页，分类与关键词交由后端过滤；主页按综合热度排序（点赞+点评+导航）
+// 列表骨架屏：数据加载期间显示占位微光卡片，加载完成后被真实卡片替换
+function renderSkeletonList() {
+  const spotList = document.querySelector("#spotList");
+  if (!spotList) return;
+  spotList.innerHTML = Array.from({ length: 4 }, () =>
+    '<div class="skeleton-card"><div class="sk sk-cover"></div><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div><div class="sk sk-line w80"></div></div>').join("");
+}
+
 async function loadListPage() {
+  renderSkeletonList();
   const params = new URLSearchParams({ page: String(state.page), limit: String(state.pageSize), sort: "hot" });
   if (state.filter !== "all") params.set("category", state.filter);
   if (state.query) params.set("q", state.query);
@@ -369,6 +378,7 @@ async function refreshList() {
 }
 
 async function loadPublicSpots() {
+  renderSkeletonList();
   await loadMapSpots();
   await refreshList();
   lastSync = nowStamp();
@@ -515,7 +525,7 @@ function navigationURL(spot) {
 
 function markerIcon(category, highlighted = false) {
   const item = categories[category];
-  return `<div class="marker-pin ${highlighted ? "is-highlight" : ""}" style="--marker-color:${item.color}"><span>${item.icon}</span></div>`;
+  return `<div class="marker-pin ${highlighted ? "is-highlight" : ""}" style="--marker-color:${item.color}"><iconify-icon icon="${item.icon}" inline></iconify-icon></div>`;
 }
 
 // 把 AI 推荐到的点位在地图上高亮，并自动缩放到这些点
@@ -584,7 +594,7 @@ function drawRoute(spots) {
   const ordered = orderRouteSpots(spots);
   const path = ordered.map((spot) => [spot.lng, spot.lat]);
   const orderText = document.querySelector("#routeOrder");
-  if (orderText) { orderText.hidden = false; orderText.textContent = `🧭 推荐路线：${ordered.map((spot, index) => `${index + 1}. ${spot.name}`).join(" → ")}`; }
+  if (orderText) { orderText.hidden = false; orderText.innerHTML = `<iconify-icon icon="ph:compass" inline></iconify-icon> 推荐路线：${ordered.map((spot, index) => `${index + 1}. ${escapeHTML(spot.name)}`).join(" → ")}`; }
   const clearButton = document.querySelector("#clearRouteButton");
   if (clearButton) clearButton.hidden = false;
   const container = document.querySelector("#guideMap");
@@ -761,7 +771,7 @@ function popupContentHTML(spot) {
     ? `<div class="popup-rating"><span class="stars">${starsHTML(spot.avg_rating)}</span><small>${Number(spot.avg_rating).toFixed(1)} · ${spot.review_count} 条点评</small><button class="detail-link" data-detail-id="${spot.id}" type="button">查看点评 →</button></div>`
     : `<div class="popup-rating"><button class="detail-link" data-detail-id="${spot.id}" type="button">评分与点评 →</button></div>`;
   const tagLine = parseSpotTagsClient(spot.tags);
-  return `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small>${tagLine ? `<div class="spot-tags">${tagLine}</div>` : ""}${ratingLine}<a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-nav-id="${spot.id}">⌖ ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button">📍 位置纠偏</button><p>${description}</p></div>`;
+  return `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small>${tagLine ? `<div class="spot-tags">${tagLine}</div>` : ""}${ratingLine}<a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-nav-id="${spot.id}"><iconify-icon icon="ph:navigation-arrow" inline></iconify-icon> ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button"><iconify-icon icon="ph:map-pin" inline></iconify-icon> 位置纠偏</button><p>${description}</p></div>`;
 }
 
 // 客户端子标签解析：后端 tags 是 JSON 数组字符串，解析失败返回空
@@ -800,31 +810,31 @@ function renderList() {
     // 是否已点赞只认后端按账号返回的 liked 字段，保证网页与 App 跨端一致。
     // 原实现用 `Number(state.likes[id]) > 0` 兜底，但 state.likes 存的是点赞总数
     const liked = spot.liked === true;
-    const likes = `${liked ? "♥" : "♡"} ${likeCount}`;
+    const likes = `<iconify-icon icon="${liked ? "ph:heart-fill" : "ph:heart"}" inline></iconify-icon> ${likeCount}`;
     // 封面是卡片的第一视觉锚点（Google Maps / 大众点评模式：带图卡片点击率显著更高）；
     // 无图时用分类色渐变 + 图标占位，避免卡片空洞
     const cover = spot.image_url
       ? `<img class="spot-cover" src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">`
-      : `<div class="cover-banner" style="background:linear-gradient(135deg, ${item.color}, ${item.color}b3)"><span>${item.icon}</span></div>`;
+      : `<div class="cover-banner" style="background:linear-gradient(135deg, ${item.color}, ${item.color}b3)"><iconify-icon icon="${item.icon}" inline></iconify-icon></div>`;
     // 提交者：编辑（分类/主图）；其他登录用户：补图（往照片墙追加）
     const editButton = spot.isOwner ? `<button class="edit-button" data-edit-id="${spot.id}" type="button">编辑分类 / 配图</button>` : (state.currentUser ? `<button class="edit-button" data-edit-id="${spot.id}" type="button">补图</button>` : "");
     const deleteButton = spot.isOwner ? `<button class="delete-button" data-delete-id="${spot.id}" type="button">删除地点</button>` : "";
     // 已收藏标记：state.savedMapName 由 loadMaps 构建（spotId → 地图名）
     const savedName = state.savedMapName[String(spot.id)];
-    const saveButton = state.currentUser && !state.myOnly ? `<button class="save-map-button ${savedName ? "saved" : ""}" data-map-spot-id="${spot.id}" type="button" ${savedName ? `title="已收藏到：${escapeHTML(savedName)}，点击可换一张地图"` : ""}>${savedName ? "已收藏 ✓" : "收藏"}</button>` : "";
+    const saveButton = state.currentUser && !state.myOnly ? `<button class="save-map-button ${savedName ? "saved" : ""}" data-map-spot-id="${spot.id}" type="button" ${savedName ? `title="已收藏到：${escapeHTML(savedName)}，点击可换一张地图"` : ""}>${savedName ? `<iconify-icon icon="ph:bookmark-simple-fill" inline></iconify-icon> 已收藏` : `<iconify-icon icon="ph:bookmark-simple" inline></iconify-icon> 收藏`}</button>` : "";
     const reportButton = !state.myOnly ? `<button class="report-button" data-report-id="${spot.id}" type="button">举报</button>` : "";
     // 次要操作收进「⋯」菜单：底部只留高频的点赞与热度，避免窄卡片溢出
     const moreItems = [saveButton, editButton, reportButton, deleteButton].filter(Boolean);
     const moreMenu = moreItems.length ? `<span class="more-menu-wrap"><button class="more-button" type="button" aria-label="更多操作">⋯</button><span class="more-menu">${moreItems.join("")}</span></span>` : "";
     const pendingTag = spot.status === "pending" ? `<span class="pending-tag">待审核</span>` : "";
-    const hotBadge = Number.isFinite(Number(spot.hot_score)) && Number(spot.hot_score) > 0 ? `<span class="footer-stat" title="点赞 + 点评×2 + 导航×2">🔥 ${spot.hot_score}</span>` : "";
+    const hotBadge = Number.isFinite(Number(spot.hot_score)) && Number(spot.hot_score) > 0 ? `<span class="footer-stat" title="点赞 + 点评×2 + 导航×2"><iconify-icon icon="ph:fire" inline></iconify-icon> ${spot.hot_score}</span>` : "";
     // 评分与分类合并为一行元信息（大众点评模式：星级 + 条数 + 品类相邻呈现）
     const metaLine = spot.review_count
       ? `<span class="stars">${starsHTML(spot.avg_rating)}</span> ${Number(spot.avg_rating).toFixed(1)}（${spot.review_count} 条） · ${item.label}`
       : `${item.label} · ${spot.address ? escapeHTML(spot.address.split(" ")[0]) : "待补充"}`;
     const spotTags = parseSpotTagsClient(spot.tags);
     const address = escapeHTML(spot.address || "地图上的目的地");
-    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}" data-spot-id="${spot.id}">${cover}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}${pendingTag}</h3></div><div class="card-meta">${metaLine}</div>${spotTags ? `<div class="spot-tags">${spotTags}</div>` : ""}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true" data-nav-id="${spot.id}">⌖ ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button><span class="footer-stat">💬 ${spot.review_count || 0}</span>${hotBadge}<span class="card-actions">${moreMenu}</span></div></article>`;
+    return `<article class="spot-card" data-lat="${spot.lat}" data-lng="${spot.lng}" data-spot-id="${spot.id}">${cover}<div class="spot-card-top"><h3>${escapeHTML(spot.name)}${pendingTag}</h3></div><div class="card-meta">${metaLine}</div>${spotTags ? `<div class="spot-tags">${spotTags}</div>` : ""}<a class="spot-address navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-navigation="true" data-nav-id="${spot.id}"><iconify-icon icon="ph:navigation-arrow" inline></iconify-icon> ${address} · 导航</a><p>${escapeHTML(spot.description)}</p><div class="card-footer"><button class="like-button" data-like-id="${spot.id}" type="button" aria-label="点赞 ${escapeHTML(spot.name)}">${likes}</button><span class="footer-stat"><iconify-icon icon="ph:chats" inline></iconify-icon> ${spot.review_count || 0}</span>${hotBadge}<span class="card-actions">${moreMenu}</span></div></article>`;
   };
   spotList.innerHTML = list.length ? list.map(cardHTML).join("") : '<div class="empty-state">没有找到匹配的地点，换个关键词试试。</div>';
   document.querySelector("#pageInfo").textContent = `${state.page} / ${totalPages}`;
@@ -1484,10 +1494,10 @@ function renderCandidatePicker(section, mapId, candidates) {
 
 /* ---------------- 应急地图：附近救援设施 + 一键求助（纯前端，联系人只存本机浏览器） ---------------- */
 const EMERGENCY_CATEGORIES = [
-  { key: "police", icon: "🚓", label: "警察局", keywords: "派出所|公安局", color: "#2F80ED" },
-  { key: "hospital", icon: "🏥", label: "医院", keywords: "医院|卫生院", color: "#E53E3E" },
-  { key: "fire", icon: "🚒", label: "消防", keywords: "消防", color: "#DD6B20" },
-  { key: "shelter", icon: "🏕", label: "避难所", keywords: "应急避难所|避难场所", color: "#38A169" }
+  { key: "police", icon: "ph:police-car", label: "警察局", keywords: "派出所|公安局", color: "#2F80ED" },
+  { key: "hospital", icon: "ph:hospital", label: "医院", keywords: "医院|卫生院", color: "#E53E3E" },
+  { key: "fire", icon: "ph:fire-truck", label: "消防", keywords: "消防", color: "#DD6B20" },
+  { key: "shelter", icon: "ph:house-line", label: "避难所", keywords: "应急避难所|避难场所", color: "#38A169" }
 ];
 const EMERGENCY_CONTACTS_KEY = "qingyuan-emergency-contacts";
 const emergencyBackdrop = document.querySelector("#emergencyBackdrop");
@@ -1536,7 +1546,7 @@ function renderEmergencyContacts() {
   const list = document.querySelector("#contactList");
   if (!list) return;
   const contacts = emergencyContacts();
-  list.innerHTML = contacts.length ? contacts.map((contact, index) => `<div class="private-map-spot"><div class="private-map-spot-info"><strong>${escapeHTML(contact.name)}</strong><span>${escapeHTML(contact.phone)}</span></div><span class="card-actions"><a class="text-button" href="tel:${escapeHTML(contact.phone)}">📞 电话</a><button class="text-button sms-contact-button" data-phone="${escapeHTML(contact.phone)}" type="button">✉️ 发定位短信</button><button class="remove-map-spot" data-index="${index}" type="button">移除</button></span></div>`).join("") : '<p class="field-note">还没有紧急联系人。联系人只保存在这台设备的浏览器里，不会上传。</p>';
+  list.innerHTML = contacts.length ? contacts.map((contact, index) => `<div class="private-map-spot"><div class="private-map-spot-info"><strong>${escapeHTML(contact.name)}</strong><span>${escapeHTML(contact.phone)}</span></div><span class="card-actions"><a class="text-button" href="tel:${escapeHTML(contact.phone)}"><iconify-icon icon="ph:phone" inline></iconify-icon> 电话</a><button class="text-button sms-contact-button" data-phone="${escapeHTML(contact.phone)}" type="button"><iconify-icon icon="ph:envelope-simple" inline></iconify-icon> 发定位短信</button><button class="remove-map-spot" data-index="${index}" type="button">移除</button></span></div>`).join("") : '<p class="field-note">还没有紧急联系人。联系人只保存在这台设备的浏览器里，不会上传。</p>';
   list.querySelectorAll(".remove-map-spot").forEach((button) => button.addEventListener("click", () => {
     const contacts = emergencyContacts();
     contacts.splice(Number(button.dataset.index), 1);
@@ -1801,7 +1811,7 @@ document.querySelector("#autoMapForm").addEventListener("submit", async (event) 
     await loadMaps();
     showToast(`AI 已创建「${payload.name}」，挑了 ${payload.spot_ids?.length || 0} 个点位`);
   } catch (error) { showToast(error.message || "生成失败"); }
-  finally { button.disabled = false; button.textContent = "AI 挑地点建图 ✦"; }
+  finally { button.disabled = false; button.innerHTML = '<iconify-icon icon="ph:sparkle" inline></iconify-icon> AI 挑地点建图'; }
 });
 render();
 loadPublicSpots();
@@ -1854,9 +1864,9 @@ function avatarSpan(user, options = {}) {
     : escapeHTML(String(name).trim().charAt(0).toUpperCase() || "?");
   return `<span class="avatar${size}" style="--avatar-color:${avatarColor(seed)}">${inner}</span>`;
 }
-// 匿名头像：人形剪影 + 模糊滤镜，配合「匿名用户」名称展示
+// 匿名头像：模糊人形图标，配合「匿名用户」名称展示
 function anonymousAvatarSpan(small = false) {
-  return `<span class="avatar anonymous${small ? " small" : ""}" aria-hidden="true"></span>`;
+  return `<span class="avatar anonymous${small ? " small" : ""}" aria-hidden="true"><iconify-icon icon="ph:user" inline></iconify-icon></span>`;
 }
 function starsHTML(rating) {
   const value = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)));
@@ -1928,7 +1938,7 @@ function openSpotDetail(spotId) {
   const navigate = document.querySelector("#detailNavigate");
   navigate.href = navigationURL(spot);
   navigate.dataset.navId = spot.id;
-  navigate.textContent = `⌖ ${spot.address || "地图上的目的地"} · 导航`;
+  navigate.innerHTML = `<iconify-icon icon="ph:navigation-arrow" inline></iconify-icon> ${escapeHTML(spot.address || "地图上的目的地")} · 导航`;
   document.querySelector("#detailDescription").textContent = spot.description || "";
   // 子标签展示在详情元信息区
   const detailTags = parseSpotTagsClient(spot.tags);

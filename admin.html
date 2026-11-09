@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>清远地图 · 管理后台</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="style.css?v=20261102-38">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css">
+  <link rel="stylesheet" href="style.css?v=20261109-39">
+  <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     body { padding: 30px; }
     .admin-shell { max-width: 1020px; margin: auto; }
@@ -65,6 +68,10 @@
       <p class="panel-desc">按名称、地址或状态筛选所有点位，可下架违规内容。</p>
       <div class="panel-tools"><input id="spotSearch" type="text" placeholder="按名称或地址搜索，留空显示全部"><select id="statusFilter"><option value="">全部状态</option><option value="approved">已上线</option><option value="pending">待审核</option><option value="rejected">已下架</option></select><button class="primary-button" id="loadSpotsButton" type="button">加载点位</button></div>
       <div id="categoryChips" class="filter-list" style="margin-bottom: 14px;"></div>
+      <div class="admin-charts">
+        <div class="admin-chart-card"><h3>分类分布</h3><canvas id="chartCategories"></canvas></div>
+        <div class="admin-chart-card"><h3>热度 Top 10</h3><canvas id="chartHot"></canvas></div>
+      </div>
       <section id="allSpotsList"></section>
     </section>
 
