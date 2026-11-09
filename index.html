@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css">
-  <link rel="stylesheet" href="style.css?v=20261109-41">
+  <link rel="stylesheet" href="style.css?v=20261109-42">
   <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js"></script>
 </head>
 <body>
@@ -111,10 +111,20 @@
       <div id="guideMap" class="guide-map"></div>
     </section>
     <section class="private-panel" id="privatePanel" hidden>
-      <div><p class="eyebrow">PRIVATE MAPS / 03</p><h2>我的私人地图</h2></div>
-      <form id="mapForm"><label class="map-form-label" for="mapNameInput">第一步 · 给地图起个名字</label><input id="mapNameInput" name="name" type="text" placeholder="例如：周末遛娃、北江美食巡礼" maxlength="40" required><button class="primary-button" type="submit">创建地图 <span>+</span></button></form>
-      <p class="map-form-hint">第二步 · 到上方「热门地点」的卡片上点「收藏」，把喜欢的点位加进这张地图</p>
-      <form id="autoMapForm" class="auto-map-form"><label class="map-form-label" for="autoThemeInput">不想自己挑？</label><input id="autoThemeInput" name="theme" type="text" placeholder="输入主题，例如：适合带爸妈的周末" maxlength="200" required><button class="primary-button" type="submit"><iconify-icon icon="ph:sparkle" inline></iconify-icon> AI 挑地点建图</button></form>
+      <div class="private-head">
+        <div class="private-intro">
+          <p class="eyebrow">PRIVATE MAPS / 03</p>
+          <h2>我的私人地图</h2>
+          <p class="private-intro-text">创建只属于你的地点清单，支持多人协作与只读分享。</p>
+        </div>
+        <div class="private-create">
+          <form id="mapForm"><input id="mapNameInput" name="name" type="text" placeholder="给地图起个名字，例如：周末遛娃、北江美食巡礼" maxlength="40" required><button class="primary-button" type="submit">创建地图 <iconify-icon icon="ph:plus" inline></iconify-icon></button></form>
+          <p class="map-form-hint"><iconify-icon icon="ph:cursor" inline></iconify-icon> 收藏方式：到上方「热门地点」的卡片上点「收藏」，把喜欢的点位加进这张地图</p>
+        </div>
+      </div>
+      <div class="private-ai-row">
+        <form id="autoMapForm"><input id="autoThemeInput" name="theme" type="text" placeholder="不想自己挑？输入主题让 AI 建图，例如：适合带爸妈的周末" maxlength="200" required><button class="primary-button" type="submit"><iconify-icon icon="ph:sparkle" inline></iconify-icon> AI 挑地点建图</button></form>
+      </div>
       <div id="privateMapList" class="private-map-list"></div>
       <button id="trashToggleButton" class="text-button trash-toggle" type="button"><iconify-icon icon="ph:trash" inline></iconify-icon> 最近删除（保留 30 天）</button>
       <div id="privateMapDetail" class="private-map-detail" hidden></div>
