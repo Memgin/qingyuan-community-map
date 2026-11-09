@@ -41,7 +41,14 @@
       <p id="detailDescription" class="detail-description"></p>
       <div class="rating-summary" id="ratingSummary"><span class="field-note">评分加载中…</span></div>
       <div class="detail-photo" id="detailPhotoBlock" hidden>
-        <p class="detail-photo-title">📷 补充社区照片（上传后在地图弹窗中查看）</p>
+        <p class="detail-photo-title">📷 社区照片（追加式，不会覆盖他人的图）</p>
+        <div id="detailPhotoCarousel" class="photo-carousel" hidden>
+          <div class="photo-carousel-track" id="detailPhotoTrack"></div>
+          <button class="carousel-nav prev" id="detailPhotoPrev" type="button" aria-label="上一张">‹</button>
+          <button class="carousel-nav next" id="detailPhotoNext" type="button" aria-label="下一张">›</button>
+          <div class="carousel-dots" id="detailPhotoDots"></div>
+        </div>
+        <div id="detailPhotoEmpty" hidden><span class="field-note">还没有照片，来传第一张</span></div>
         <div class="detail-photo-form"><input type="file" id="detailWallImage" accept="image/jpeg,image/png,image/webp"><button class="primary-button" id="detailUploadPhotoButton" type="button">上传照片</button></div>
       </div>
       <h3 class="review-section-title">全部点评</h3>
