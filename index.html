@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261102-36">
+  <link rel="stylesheet" href="style.css?v=20261102-37">
 </head>
 <body>
   <main class="app-shell">
@@ -41,7 +41,13 @@
       <div class="rating-summary" id="ratingSummary"><span class="field-note">评分加载中…</span></div>
       <div class="detail-photo" id="detailPhotoBlock" hidden>
         <p class="detail-photo-title">📷 社区照片（追加式，不会覆盖他人的图）</p>
-        <div id="detailPhotoWall" class="detail-photo-wall"><span class="field-note">照片加载中…</span></div>
+        <div id="detailPhotoCarousel" class="photo-carousel" hidden>
+          <div class="photo-carousel-track" id="detailPhotoTrack"></div>
+          <button class="carousel-nav prev" id="detailPhotoPrev" type="button" aria-label="上一张">‹</button>
+          <button class="carousel-nav next" id="detailPhotoNext" type="button" aria-label="下一张">›</button>
+          <div class="carousel-dots" id="detailPhotoDots"></div>
+        </div>
+        <div id="detailPhotoEmpty" hidden><span class="field-note">还没有照片，来传第一张</span></div>
         <div class="detail-photo-form"><input type="file" id="detailWallImage" accept="image/jpeg,image/png,image/webp"><button class="primary-button" id="detailUploadPhotoButton" type="button">上传照片</button></div>
       </div>
       <h3 class="review-section-title">全部点评</h3>
@@ -67,6 +73,14 @@
       <div class="route-editor-add"><select id="routeEditorAddSelect"></select><button class="text-button" id="routeEditorAddButton" type="button">+ 添加点位</button></div>
       <button class="primary-button full-width" id="saveRouteEditorButton" type="button">保存路线</button>
     </section>
+
+    <div class="photo-lightbox" id="photoLightbox" hidden>
+      <button class="lightbox-close" id="closeLightboxButton" type="button" aria-label="关闭">×</button>
+      <button class="lightbox-nav prev" id="lightboxPrev" type="button" aria-label="上一张">‹</button>
+      <img id="lightboxImage" src="" alt="照片放大查看">
+      <button class="lightbox-nav next" id="lightboxNext" type="button" aria-label="下一张">›</button>
+      <div class="lightbox-count" id="lightboxCount"></div>
+    </div>
 
     <section class="map-panel" aria-label="清远地图">
       <div id="map"></div>
@@ -257,6 +271,6 @@
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
   <script src="demo-data.js?v=20261102-1"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/simple-liquid-glass@5.6.0/dist/web-component.esm.js"></script>
-  <script src="app.js?v=20261102-48"></script>
+  <script src="app.js?v=20261102-49"></script>
 </body>
 </html>

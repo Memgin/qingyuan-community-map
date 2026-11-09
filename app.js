@@ -1846,6 +1846,8 @@ function showDetailPanel() {
 // 进入详情前的高亮集合（如 AI 推荐的高亮），关闭详情时恢复
 let highlightBeforeDetail = null;
 function hideDetailPanel() {
+  stopPhotoAutoPlay();
+  closePhotoLightbox();
   detailPanel.hidden = true;
   if (introPanel) introPanel.hidden = false;
   state.highlightIds = highlightBeforeDetail || new Set();
@@ -1898,7 +1900,7 @@ function openSpotDetail(spotId) {
   // 补图区块：登录用户在详情页直接给点位追加照片
   document.querySelector("#detailPhotoBlock").hidden = !state.currentUser;
   document.querySelector("#detailWallImage").value = "";
-  renderDetailPhotoWall(spot.id);
+  renderDetailPhotoCarousel(spot.id);
   showDetailPanel();
   renderStarInput();
   setReviewStars(5);
@@ -2006,22 +2008,90 @@ async function deleteMyReview(reviewId) {
   }
 }
 
-// 详情页照片墙：展示已上传的社区照片（与图钉弹窗共用同一数据源）
-async function renderDetailPhotoWall(spotId) {
-  const wall = document.querySelector("#detailPhotoWall");
-  if (!wall) return;
-  wall.innerHTML = '<span class="field-note">照片加载中…</span>';
+/* ---------------- 详情页照片轮播（自动播放 + 触摸滑动）与点击放大灯箱 ---------------- */
+let detailPhotos = [];
+let detailPhotoIndex = 0;
+let detailPhotoTimer = null;
+
+function stopPhotoAutoPlay() { if (detailPhotoTimer) { clearInterval(detailPhotoTimer); detailPhotoTimer = null; } }
+function showDetailPhoto(index) {
+  if (!detailPhotos.length) return;
+  detailPhotoIndex = (index + detailPhotos.length) % detailPhotos.length;
+  document.querySelector("#detailPhotoTrack").style.transform = `translateX(-${detailPhotoIndex * 100}%)`;
+  document.querySelectorAll("#detailPhotoDots button").forEach((dot, i) => dot.classList.toggle("on", i === detailPhotoIndex));
+}
+
+async function renderDetailPhotoCarousel(spotId) {
+  stopPhotoAutoPlay();
+  detailPhotos = [];
+  detailPhotoIndex = 0;
+  const carousel = document.querySelector("#detailPhotoCarousel");
+  const empty = document.querySelector("#detailPhotoEmpty");
+  const dots = document.querySelector("#detailPhotoDots");
+  const track = document.querySelector("#detailPhotoTrack");
+  carousel.hidden = true;
+  empty.hidden = false;
+  empty.innerHTML = '<span class="field-note">照片加载中…</span>';
   try {
     const response = await apiFetch(`${API_BASE}/spots/${spotId}/photos`);
     const payload = await response.json();
-    const photos = Array.isArray(payload.data) ? payload.data : [];
-    wall.innerHTML = photos.length
-      ? photos.map((photo) => `<figure class="detail-photo-item"><img src="${escapeHTML(photo.url)}" alt="社区照片" loading="lazy"></figure>`).join("")
-      : '<span class="field-note">还没有照片，来传第一张</span>';
-  } catch {
-    wall.innerHTML = '<span class="field-note">照片加载失败</span>';
-  }
+    detailPhotos = (Array.isArray(payload.data) ? payload.data : []).map((photo) => photo.url);
+  } catch { /* 加载失败按无照片处理，不影响补图 */ }
+  if (!detailPhotos.length) { empty.innerHTML = '<span class="field-note">还没有照片，来传第一张</span>'; return; }
+  empty.hidden = true;
+  carousel.hidden = false;
+  track.innerHTML = detailPhotos.map((url) => `<img src="${escapeHTML(url)}" alt="社区照片" data-lightbox-index="${detailPhotos.indexOf(url)}">`).join("");
+  dots.innerHTML = detailPhotos.map((_, index) => `<button type="button" data-dot="${index}" aria-label="第 ${index + 1} 张"></button>`).join("");
+  dots.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => showDetailPhoto(Number(button.dataset.dot))));
+  showDetailPhoto(0);
+  // 自动轮播：4 秒一张；触摸滑动切换（手机直接划）
+  detailPhotoTimer = setInterval(() => showDetailPhoto(detailPhotoIndex + 1), 4000);
 }
+
+document.querySelector("#detailPhotoPrev").addEventListener("click", () => { stopPhotoAutoPlay(); showDetailPhoto(detailPhotoIndex - 1); });
+document.querySelector("#detailPhotoNext").addEventListener("click", () => { stopPhotoAutoPlay(); showDetailPhoto(detailPhotoIndex + 1); });
+// 点击照片打开灯箱放大查看
+document.querySelector("#detailPhotoTrack").addEventListener("click", (event) => {
+  const img = event.target.closest("img");
+  if (!img) return;
+  stopPhotoAutoPlay();
+  openPhotoLightbox(Number(img.dataset.lightboxIndex) || detailPhotoIndex);
+});
+// 触摸滑动：左右划切换
+(() => {
+  const carousel = document.querySelector("#detailPhotoCarousel");
+  let startX = 0;
+  carousel.addEventListener("touchstart", (event) => { startX = event.touches[0].clientX; }, { passive: true });
+  carousel.addEventListener("touchend", (event) => {
+    const dx = event.changedTouches[0].clientX - startX;
+    if (Math.abs(dx) > 40) { stopPhotoAutoPlay(); showDetailPhoto(detailPhotoIndex + (dx < 0 ? 1 : -1)); }
+  }, { passive: true });
+})();
+
+/* ---------------- 灯箱：全屏放大查看，左右切换，Esc / 点空白关闭 ---------------- */
+const photoLightbox = document.querySelector("#photoLightbox");
+let lightboxIndex = 0;
+
+function openPhotoLightbox(index) {
+  if (!detailPhotos.length) return;
+  lightboxIndex = index;
+  updateLightbox();
+  photoLightbox.hidden = false;
+}
+function updateLightbox() {
+  if (photoLightbox.hidden) return;
+  document.querySelector("#lightboxImage").src = detailPhotos[lightboxIndex] || "";
+  document.querySelector("#lightboxCount").textContent = `${lightboxIndex + 1} / ${detailPhotos.length}`;
+  const single = detailPhotos.length < 2;
+  document.querySelector("#lightboxPrev").hidden = single;
+  document.querySelector("#lightboxNext").hidden = single;
+}
+function closePhotoLightbox() { photoLightbox.hidden = true; document.querySelector("#lightboxImage").src = ""; }
+
+document.querySelector("#closeLightboxButton").addEventListener("click", closePhotoLightbox);
+photoLightbox.addEventListener("click", (event) => { if (event.target === photoLightbox) closePhotoLightbox(); });
+document.querySelector("#lightboxPrev").addEventListener("click", () => { lightboxIndex = (lightboxIndex - 1 + detailPhotos.length) % detailPhotos.length; updateLightbox(); });
+document.querySelector("#lightboxNext").addEventListener("click", () => { lightboxIndex = (lightboxIndex + 1) % detailPhotos.length; updateLightbox(); });
 
 document.querySelector("#reviewLoginButton").addEventListener("click", openAuth);
 // 详情页补图：与编辑弹窗的补图同一后端流程（uploads → 照片墙追加）
@@ -2154,6 +2224,8 @@ document.querySelector("#settingsForm").addEventListener("submit", async (event)
 // Esc 关闭点评相关弹窗
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
+  // 灯箱开着时 Esc 只关灯箱（优先级高于详情面板）
+  if (!photoLightbox.hidden) { closePhotoLightbox(); return; }
   hideDetailPanel();
   profileBackdrop.hidden = true;
   settingsBackdrop.hidden = true;
