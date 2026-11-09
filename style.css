@@ -258,24 +258,25 @@ input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 3px rgba(47,109,90
 
 /* ---------------- 地图图钉（Google Maps 风格）：圆头 + 正下尖角 + 落地投影 + 高亮脉冲 ----------------
    覆盖长行内的旧 .marker-pin 规则；新结构：容器(.marker-pin) > 圆头(.marker-pin-body 含图标+尖角) */
-.marker-pin { position: relative; width: 36px; height: 44px; }
+.marker-pin { position: relative; width: 32px; height: 42px; background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; display: block; }
 .marker-pin-body {
   position: relative; z-index: 1;
-  width: 36px; height: 36px;
+  width: 32px; height: 32px;
   display: grid; place-items: center;
   background: var(--marker-color);
-  border: 2.5px solid #fff;
+  border: 2px solid #fff;
   border-radius: 50%;
-  box-shadow: 0 5px 12px rgba(0, 0, 0, .28);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .22);
   transition: transform .18s;
 }
-.marker-pin-body iconify-icon { font-size: 17px; color: #fff; }
+.marker-pin-body iconify-icon { font-size: 15px; color: #fff; }
 /* 尖角：圆底下缘中央的三角形，尖端对准真实点位 */
-.marker-pin-body::after { content: ""; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); border: 9px solid transparent; border-top-color: var(--marker-color); border-bottom: 0; }
+.marker-pin { width: 32px; height: 42px; }
+.marker-pin-body::after { content: ""; position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); border: 8px solid transparent; border-top-color: var(--marker-color); border-bottom: 0; }
 /* 落地投影：图钉下方椭圆暗影，增强空间感 */
 .marker-pin::before { content: ""; position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); width: 20px; height: 6px; border-radius: 50%; background: rgba(0, 0, 0, .2); filter: blur(1.5px); }
 /* 高亮态：珊瑚色脉冲光环 + 轻微放大 */
-.marker-pin.is-highlight { z-index: 300; }
+.marker-pin.is-highlight { z-index: 300; box-shadow: none; }
 .marker-pin.is-highlight .marker-pin-body {
   box-shadow: 0 0 0 3px rgba(235, 118, 94, .55), 0 5px 14px rgba(0, 0, 0, .3);
   animation: pin-pulse 1.6s ease-in-out infinite;

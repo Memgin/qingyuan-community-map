@@ -1,11 +1,13 @@
+/* 分类色系（低饱和莫兰迪调）：在地图绿底上沉稳耐看，分类间仍可区分；
+   应急地图的安全分类保持高饱和高辨识，不受此处影响 */
 const categories = {
   all: { label: "全部", color: "#2f6d5a", icon: "ph:sparkle" },
-  scenic: { label: "景点", color: "#5995a8", icon: "ph:mountains" },
-  food: { label: "美食", color: "#eb765e", icon: "ph:fork-knife" },
-  shopping: { label: "商圈", color: "#b4778e", icon: "ph:storefront" },
-  medical: { label: "医疗", color: "#68a678", icon: "ph:first-aid-kit" },
-  school: { label: "学校", color: "#6f7fc0", icon: "ph:graduation-cap" },
-  transit: { label: "车站", color: "#d39a47", icon: "ph:bus" }
+  scenic: { label: "景点", color: "#6e8ca0", icon: "ph:mountains" },
+  food: { label: "美食", color: "#c96f5e", icon: "ph:fork-knife" },
+  shopping: { label: "商圈", color: "#a97f92", icon: "ph:storefront" },
+  medical: { label: "医疗", color: "#7a9b84", icon: "ph:first-aid-kit" },
+  school: { label: "学校", color: "#7d8bb5", icon: "ph:graduation-cap" },
+  transit: { label: "车站", color: "#c9a063", icon: "ph:bus" }
 };
 
 // 演示用默认点位已于 2026-10-10 移除：页面只展示数据库里真实收录的点位。
@@ -785,7 +787,7 @@ function parseSpotTagsClient(raw) {
 function renderMarkers() {
   state.markers.forEach((marker) => marker.setMap(null));
   state.markers = visibleSpots().map((spot) => {
-    const marker = new AMap.Marker({ position: [spot.lng, spot.lat], content: markerIcon(spot.category, state.highlightIds.has(String(spot.id))), offset: new AMap.Pixel(-18, -44), title: spot.name });
+    const marker = new AMap.Marker({ position: [spot.lng, spot.lat], content: markerIcon(spot.category, state.highlightIds.has(String(spot.id))), offset: new AMap.Pixel(-16, -41), title: spot.name });
     marker.setMap(map);
     marker.on("click", () => {
       const infoWindow = new AMap.InfoWindow({ content: popupContentHTML(spot), offset: new AMap.Pixel(0, -35), closeWhenClickMap: true });
@@ -1585,7 +1587,7 @@ function searchEmergencyFacilities(key) {
       const marker = new AMap.Marker({
         position: [poi.location.lng, poi.location.lat],
         content: `<div class="marker-pin"><span class="marker-pin-body" style="--marker-color:${category.color}"><iconify-icon icon="${category.icon}" inline></iconify-icon></span></div>`,
-        offset: new AMap.Pixel(-18, -44),
+        offset: new AMap.Pixel(-16, -41),
         title: poi.name
       });
       map.add(marker);

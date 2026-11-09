@@ -8,7 +8,7 @@ const statusFilter = document.querySelector("#statusFilter");
 const categoryChips = document.querySelector("#categoryChips");
 // 管理列表里分类 key 显示为中文（与前台「全部地点」页的分类色一致）
 const CATEGORY_LABELS = { scenic: "景点", food: "美食", shopping: "商圈", medical: "医疗", school: "校园", transit: "交通" };
-const CATEGORY_COLORS = { scenic: "#5995A8", food: "#EB765E", shopping: "#B4778E", medical: "#68A678", school: "#6F7FC0", transit: "#D39A47" };
+const CATEGORY_COLORS = { scenic: "#6E8CA0", food: "#C96F5E", shopping: "#A97F92", medical: "#7A9B84", school: "#7D8BB5", transit: "#C9A063" };
 // 数据概览图表（Chart.js）：分类分布 + 热度 Top 10，随点位数据加载后刷新
 let chartCategories = null;
 let chartHot = null;
