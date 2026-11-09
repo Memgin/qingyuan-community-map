@@ -1785,7 +1785,7 @@ function collectFormTags() {
   return tags;
 }
 
-document.querySelector("#mapForm").addEventListener("submit", async (event) => {
+document.querySelector("#mapForm").addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget; const name = new FormData(form).get("name"); try { const response = await apiFetch(`${API_BASE}/maps`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ name }) }); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload.error || "创建失败"); form.reset(); await loadMaps(); showToast(`私人地图“${payload.name}”已创建`); } catch (error) { showToast(error.message || "创建失败"); } });
 // AI 生成私人地图：输入主题，模型从已上线点位中挑 2-8 个自动建图
 document.querySelector("#autoMapForm").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -2064,7 +2064,6 @@ document.querySelector("#detailUploadPhotoButton").addEventListener("click", asy
     await requestPhotoAppend(detailSpotId, uploadPayload.url);
     document.querySelector("#detailWallImage").value = "";
     showToast("照片已补充到点位");
-    renderDetailPhotoWall(detailSpotId);
   } catch (error) {
     showToast(error.message);
   } finally {
