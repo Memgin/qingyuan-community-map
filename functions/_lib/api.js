@@ -920,8 +920,9 @@ async function updateOwnSpot(request, env, id) {
     updates.category = body.category;
   }
   if (body.image_url !== undefined) {
-    const url = String(body.image_url || "").trim();
-    if (url.length > 0 && !url.startsWith("/api/images/")) return json({ error: "图片地址无效" }, 400, env);
+    const raw = String(body.image_url || "").trim();
+    const url = raw ? normalizeImageURL(raw) : "";
+    if (raw && !url) return json({ error: "图片地址无效" }, 400, env);
     updates.image_url = url;
   }
   const keys = Object.keys(updates);
@@ -943,8 +944,8 @@ async function addSpotPhoto(request, env, spotId) {
   const spot = await env.DB.prepare("SELECT id FROM spots WHERE id = ?").bind(spotId).first();
   if (!spot) return json({ error: "地点不存在" }, 404, env);
   const body = await request.json().catch(() => ({}));
-  const url = String(body.url || "").trim();
-  if (!url.startsWith("/api/images/")) return json({ error: "请先上传图片" }, 400, env);
+  const url = normalizeImageURL(body.url);
+  if (!url) return json({ error: "请先上传图片" }, 400, env);
   // 限额：单人对单地点最多 9 张，防止刷量
   const count = await env.DB.prepare("SELECT COUNT(*) AS total FROM spot_photos WHERE spot_id = ? AND user_id = ?").bind(spotId, user.id).first();
   if (Number(count.total) >= 9) return json({ error: "每个地点最多补充 9 张照片" }, 400, env);
@@ -1656,11 +1657,23 @@ function validateSpot(body) {
   const lat = Number(body.lat); const lng = Number(body.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < 23.4 || lat > 24.8 || lng < 112.4 || lng > 113.8) return { ok: false, error: "坐标不在清远范围内" };
   if (typeof body.address !== "string" || body.address.trim().length < 2 || body.address.length > 120) return { ok: false, error: "请提供有效的地址" };
-  const imageUrl = typeof body.image_url === "string" ? body.image_url.trim() : "";
-  // 图片地址只允许本项目上传生成的 /api/images/ 路径，避免提交外链 URL 后被
+  const rawImageUrl = typeof body.image_url === "string" ? body.image_url.trim() : "";
+  // 图片地址只允许本项目上传生成的 /api/images/ 路径（归一化后入库），避免提交外链 URL 后被
   // 直接渲染成 <img>，造成访问追踪、盗链或违规图片注入（照片墙已采用同样规则）
-  if (imageUrl && !/^\/api\/images\/[\w./-]+$/.test(imageUrl)) return { ok: false, error: "图片地址无效，请重新上传图片后再提交" };
+  const imageUrl = rawImageUrl ? normalizeImageURL(rawImageUrl) : "";
+  if (rawImageUrl && !imageUrl) return { ok: false, error: "图片地址无效，请重新上传图片后再提交" };
   return { ok: true, value: { name: body.name.trim(), address: body.address.trim(), category: body.category, description: body.description.trim(), lat, lng, image_url: imageUrl } };
+}
+
+// 归一化图片地址：/api/uploads 返回的是含域名的绝对 URL，此处提取出
+// /api/images/ 起始的相对路径入库——域名无关，换域名后历史图片不失效；
+// 非本项目生成的图片地址返回 null（调用方据此拒绝）
+function normalizeImageURL(raw) {
+  const url = String(raw || "").trim();
+  const index = url.indexOf("/api/images/");
+  if (index === -1) return null;
+  const path = url.slice(index);
+  return /^\/api\/images\/[\w./-]+$/.test(path) ? path : null;
 }
 
 function normalizeName(value) { return String(value).replace(/[·\s（）()\-]/g, "").toLowerCase(); }
