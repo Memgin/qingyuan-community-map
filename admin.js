@@ -25,9 +25,20 @@ function renderAdminCharts(spots) {
   }
   if (hotCanvas) {
     const top = [...spots].sort((a, b) => Number(b.hot_score || 0) - Number(a.hot_score || 0)).slice(0, 10);
-    const data = { labels: top.map((spot) => spot.name), datasets: [{ data: top.map((spot) => Number(spot.hot_score || 0)), backgroundColor: "#EB765E", borderRadius: 8 }] };
+    // 三段堆叠：点赞(1) / 点评(2) / 导航(2)——即使热度很小也能看清构成
+    const data = {
+      labels: top.map((spot) => spot.name),
+      datasets: [
+        { label: "点赞", data: top.map((spot) => Number(spot.likes || 0)), backgroundColor: "#6E8CA0", borderRadius: 4 },
+        { label: "点评×2", data: top.map((spot) => Number(spot.review_count || 0) * 2), backgroundColor: "#C96F5E", borderRadius: 4 },
+        { label: "导航×2", data: top.map((spot) => Number(spot.nav_count || 0) * 2), backgroundColor: "#C9A063", borderRadius: 4 }
+      ]
+    };
+    const totalHot = top.reduce((sum, spot) => sum + Number(spot.hot_score || 0), 0);
+    document.querySelector("#chartHotEmpty").hidden = totalHot > 0;
+    hotCanvas.style.visibility = totalHot > 0 ? "visible" : "hidden";
     if (chartHot) chartHot.destroy();
-    chartHot = new Chart(hotCanvas, { type: "bar", data, options: { indexAxis: "y", responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (item) => `热度 ${item.raw}` } } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } } });
+    chartHot = new Chart(hotCanvas, { type: "bar", data, options: { indexAxis: "y", responsive: true, plugins: { legend: { position: "top", labels: { boxWidth: 12 } }, tooltip: { callbacks: { label: (item) => ` ${item.dataset.label}：${item.raw}` } } }, scales: { x: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }, y: { stacked: true } } } });
   }
 }
 const ADMIN_CATEGORIES = [

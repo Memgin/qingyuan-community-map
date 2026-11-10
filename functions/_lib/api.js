@@ -191,7 +191,7 @@ async function listSpots(request, url, env) {
   const count = await env.DB.prepare(`SELECT COUNT(*) AS total FROM spots WHERE ${where}`).bind(...bindings).first();
   const columns = fields === "map" ? "id, name, category, lat, lng, address, description, image_url" : "id, name, address, category, description, lat, lng, image_url, likes, created_at";
   // 列表附带评分聚合与综合热度分；reviews/nav_count 未迁移时自动降级为无这些字段
-  const ratingColumns = `, (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.spot_id = spots.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.spot_id = spots.id) AS review_count, ${hotExpression} AS hot_score, spots.tags AS tags`;
+  const ratingColumns = `, (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.spot_id = spots.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.spot_id = spots.id) AS review_count, ${hotExpression} AS hot_score, spots.nav_count AS nav_count, spots.tags AS tags`;
   let rows;
   try {
     rows = await env.DB.prepare(`SELECT ${columns}${ratingColumns} FROM spots WHERE ${where} ${orderClause} LIMIT ? OFFSET ?`).bind(...bindings, limit, (page - 1) * limit).all();
