@@ -210,11 +210,13 @@ async function loadAllSpots() {
     const payload = await request(`/admin/spots/all?${params}`);
     renderAdminCharts(payload.data);
     const categoryOptions = (spot) => ADMIN_CATEGORIES.filter((item) => item.key).map((item) => `<option value="${item.key}"${spot.category === item.key ? " selected" : ""}>${item.label}</option>`).join("");
-    // 表格化布局：分类下拉选择即保存（无需单独按钮），状态用彩色胶囊标签
-    allSpotsList.innerHTML = payload.data.length ? `<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>地点</th><th>状态</th><th>分类</th><th>点赞</th><th>加入时间</th><th>操作</th></tr></thead><tbody>${payload.data.map((spot) => `<tr>
+    const spotTagsText = (spot) => { try { const list = typeof spot.tags === "string" ? JSON.parse(spot.tags) : []; return Array.isArray(list) ? list.join("，") : ""; } catch { return ""; } };
+    // 表格化布局：分类下拉与子标签输入均为失焦即保存，状态用彩色胶囊标签
+    allSpotsList.innerHTML = payload.data.length ? `<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>地点</th><th>状态</th><th>分类</th><th>子标签</th><th>点赞</th><th>加入时间</th><th>操作</th></tr></thead><tbody>${payload.data.map((spot) => `<tr>
       <td><strong>${escapeHTML(spot.name)}</strong><small>${escapeHTML(spot.address || spot.description || "")}</small></td>
       <td><span class="status-pill ${spot.status}">${escapeHTML(STATUS_LABELS[spot.status] || spot.status)}</span></td>
       <td><select data-category-id="${spot.id}">${categoryOptions(spot)}</select></td>
+      <td><input type="text" class="admin-tags" data-tags-id="${spot.id}" value="${escapeHTML(spotTagsText(spot))}" maxlength="60" placeholder="逗号分隔，最多 5 个"></td>
       <td>${spot.likes}</td>
       <td>${escapeHTML((spot.created_at || "").slice(0, 16))}</td>
       <td><button class="delete" data-delete-id="${spot.id}" type="button">删除</button></td>
@@ -226,6 +228,19 @@ async function loadAllSpots() {
         await request(`/admin/spots/${select.dataset.categoryId}/category`, { method: "POST", body: JSON.stringify({ category: select.value }) });
         message.textContent = "分类已更新";
         await loadAllSpots();
+      } catch (error) {
+        message.textContent = error.message;
+        loadAllSpots();
+      }
+    }));
+    // 子标签输入：失焦（change）即保存，超过 5 个自动截断并回写显示
+    allSpotsList.querySelectorAll("input[data-tags-id]").forEach((input) => input.addEventListener("change", async () => {
+      const tags = input.value.split(/[,，、\s]+/).map((tag) => tag.trim()).filter(Boolean).slice(0, 5);
+      if (tags.length < input.value.split(/[,，、\s]+/).filter((tag) => tag.trim()).length) { message.textContent = "子标签最多 5 个，已保留前 5 个"; }
+      try {
+        await request(`/admin/spots/${input.dataset.tagsId}/tags`, { method: "POST", body: JSON.stringify({ tags }) });
+        input.value = tags.join("，");
+        message.textContent = "子标签已更新";
       } catch (error) {
         message.textContent = error.message;
         loadAllSpots();

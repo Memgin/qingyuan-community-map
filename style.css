@@ -195,6 +195,7 @@ button { cursor: pointer; }
 .admin-table td strong { display: block; font-size: 14px; }
 .admin-table td small { display: block; margin-top: 3px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
 .admin-table select { margin: 0; width: auto; padding: 6px 8px; font-size: 12px; background: #fff; }
+.admin-table input[type="text"] { margin: 0; width: 170px; padding: 6px 8px; font-size: 12px; background: #fff; }
 .admin-table .delete { border: 1px solid rgba(235,118,94,.45); background: none; color: var(--coral); padding: 6px 12px; font-size: 12px; cursor: pointer; }
 .admin-table .delete:hover { background: var(--coral); color: #fff; }
 .status-pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 10px; font-weight: 700; }

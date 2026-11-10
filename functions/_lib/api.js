@@ -142,6 +142,8 @@ async function dispatch(request, env) {
     if (adminDeleteMatch && request.method === "DELETE") return adminDeleteSpot(request, env, Number(adminDeleteMatch[1]));
     const adminCategoryMatch = url.pathname.match(/^\/api\/admin\/spots\/(\d+)\/category$/);
     if (adminCategoryMatch && request.method === "POST") return adminUpdateSpotCategory(request, env, Number(adminCategoryMatch[1]));
+    const adminTagsMatch = url.pathname.match(/^\/api\/admin\/spots\/(\d+)\/tags$/);
+    if (adminTagsMatch && request.method === "POST") return adminUpdateSpotTags(request, env, Number(adminTagsMatch[1]));
     if (url.pathname === "/api/admin/spots/all" && request.method === "GET") return listAdminSpots(request, url, env);
     if (url.pathname === "/api/admin/users/reset-password" && request.method === "POST") return adminResetPassword(request, env);
     if (url.pathname === "/api/admin/reset-requests" && request.method === "GET") return listResetRequests(request, env);
@@ -1749,6 +1751,18 @@ async function adminUpdateSpotCategory(request, env, id) {
   const result = await env.DB.prepare("UPDATE spots SET category = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(body.category, id).run();
   if (!result.meta.changes) return json({ error: "地点不存在" }, 404, env);
   return json({ id, category: body.category, updated: true }, 200, env);
+}
+
+// 管理员修改点位子标签：接受数组或逗号分隔字符串，经 parseSpotTags 净化（最多 5 个）；
+// 更新 updated_at 使增量同步（since）把新标签推给 App 端
+async function adminUpdateSpotTags(request, env, id) {
+  if (!authorized(request, env)) return json({ error: "未授权" }, 401, env);
+  const body = await request.json().catch(() => null);
+  const tagList = parseSpotTags(body?.tags);
+  if (body?.tags !== undefined && body?.tags !== null && body?.tags !== "" && !tagList) return json({ error: "子标签格式无效（最多 5 个，每个不超过 10 字）" }, 400, env);
+  const result = await env.DB.prepare("UPDATE spots SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(JSON.stringify(tagList || []), id).run().catch(() => null);
+  if (!result || !(result.meta?.changes > 0)) return json({ error: "地点不存在" }, 404, env);
+  return json({ id, tags: tagList || [], updated: true }, 200, env);
 }
 
 async function adminDeleteSpot(request, env, id) {
