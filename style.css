@@ -403,6 +403,10 @@ input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 3px rgba(47,109,90
 .spot-tags .tag-chip { padding: 2px 8px; background: rgba(47,109,90,.1); color: var(--green); font-size: 10px; font-weight: 700; border: 0; cursor: pointer; transition: background .15s; }
 .spot-tags .tag-chip:hover { background: rgba(47,109,90,.22); }
 #tagFilterChip { color: var(--green); font-weight: 700; }
+/* 编辑弹窗的子标签 chips：可单个删除 */
+.tag-chip-removable { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px !important; font-size: 11px !important; }
+.tag-chip-removable button { border: 0; background: rgba(25,43,42,.12); color: inherit; width: 16px; height: 16px; border-radius: 50%; font-size: 11px; line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0; }
+.tag-chip-removable button:hover { background: var(--coral); color: #fff; }
 
 /* 详情页补图区块 */
 .detail-photo { margin-top: 12px; }

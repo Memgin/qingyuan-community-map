@@ -1155,6 +1155,47 @@ const editBackdrop = document.querySelector("#editBackdrop");
 let editingSpotId = null;
 let editingOwner = false;
 
+/* ---------------- 编辑弹窗 · 子标签 chips 编辑器：单个删除（×）+ 回车/逗号添加 ---------------- */
+let editTagList = [];
+function renderEditTagChips() {
+  const box = document.querySelector("#editTagChips");
+  if (!box) return;
+  box.innerHTML = editTagList.length
+    ? editTagList.map((tag, index) => `<span class="tag-chip tag-chip-removable">${escapeHTML(tag)}<button type="button" data-remove-tag="${index}" aria-label="删除 ${escapeHTML(tag)}">×</button></span>`).join("")
+    : '<span class="field-note">还没有子标签，在下方输入添加</span>';
+  box.querySelectorAll("[data-remove-tag]").forEach((button) => button.addEventListener("click", () => {
+    editTagList.splice(Number(button.dataset.removeTag), 1);
+    renderEditTagChips();
+  }));
+}
+function addEditTagFromInput() {
+  const input = document.querySelector("#editTags");
+  const message = document.querySelector("#editMessage");
+  const parts = input.value.split(/[,，、\s]+/).map((tag) => tag.trim()).filter(Boolean);
+  if (!parts.length) return;
+  for (const tag of parts) {
+    if (tag.length > 10) { message.textContent = `「${tag}」超过 10 个字，请拆短一点`; continue; }
+    if (editTagList.includes(tag)) { message.textContent = `「${tag}」已存在`; continue; }
+    if (editTagList.length >= 5) { message.textContent = "子标签最多 5 个"; break; }
+    editTagList.push(tag);
+  }
+  input.value = "";
+  message.textContent = "";
+  renderEditTagChips();
+}
+
+// 输入框交互：回车添加、输入逗号自动收尾添加、失焦兜底添加
+const editTagsInput = document.querySelector("#editTags");
+editTagsInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); addEditTagFromInput(); }
+});
+editTagsInput.addEventListener("input", () => {
+  if (/[，,、]$/.test(editTagsInput.value)) addEditTagFromInput();
+});
+editTagsInput.addEventListener("blur", () => {
+  if (editTagsInput.value.trim()) addEditTagFromInput();
+});
+
 async function openEditModal(spot) {
   editingSpotId = spot.id;
   // 提交者可以改分类与主图；其他登录用户只能往照片墙追加照片
@@ -1167,10 +1208,12 @@ async function openEditModal(spot) {
     document.querySelector("#editImage").value = "";
     document.querySelector("#editImageNote").textContent = spot.image_url ? "当前已有主图：不选新图则保留原图，选了即替换" : "当前没有主图，可以上传一张";
     document.querySelector("#editMessage").textContent = "";
-    // 子标签预填：后端 tags 是 JSON 数组字符串，解析为逗号分隔展示
+    // 子标签 chips 编辑器：后端 tags 是 JSON 数组字符串，预填为可单个删除的标签
     let tags = [];
     try { tags = typeof spot.tags === "string" ? JSON.parse(spot.tags) : Array.isArray(spot.tags) ? spot.tags : []; } catch { tags = []; }
-    document.querySelector("#editTags").value = tags.join("，");
+    editTagList = Array.isArray(tags) ? tags.slice(0, 5) : [];
+    renderEditTagChips();
+    document.querySelector("#editTags").value = "";
   }
   document.querySelector("#editWallImage").value = "";
   editBackdrop.hidden = false;
@@ -1235,9 +1278,10 @@ document.querySelector("#editForm").addEventListener("submit", async (event) => 
   submitButton.disabled = true; submitButton.textContent = "保存中…";
   try {
     const body = { category: document.querySelector("#editCategory").value };
-    // 子标签：逗号分隔输入，交给后端净化（最多 5 个、每个 ≤10 字）
-    const tagInput = document.querySelector("#editTags").value.trim();
-    body.tags = tagInput ? tagInput.split(/[,，、\s]+/).filter(Boolean) : [];
+    // 子标签：chips 编辑器的当前列表（先把输入框里未回车的内容收进来）
+    const pendingTagInput = document.querySelector("#editTags");
+    if (pendingTagInput.value.trim()) addEditTagFromInput();
+    body.tags = [...editTagList];
     const file = document.querySelector("#editImage").files[0];
     if (file) {
       if (file.size > 20 * 1024 * 1024) throw new Error("单张图片不能超过 20MB。");

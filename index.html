@@ -189,7 +189,7 @@
         </div>
         <div id="ownerEditSection" hidden>
           <label>地点分类<select name="category" id="editCategory"></select></label>
-          <label>子标签（可选，逗号分隔，最多 5 个）<input type="text" name="tags" id="editTags" maxlength="60" placeholder="例如：早茶，老字号"></label>
+          <label>子标签（可选，最多 5 个，点 × 删除）<div id="editTagChips" class="tag-chips"></div><input type="text" name="tags" id="editTags" placeholder="输入标签后回车，或用逗号分隔，例如：早茶"></label>
           <label>更换主图<input type="file" name="image" accept="image/*" id="editImage"></label>
           <p class="field-note" id="editImageNote"></p>
           <button class="primary-button full-width" type="submit">保存修改</button>
@@ -314,6 +314,6 @@
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
   <script src="demo-data.js?v=20261102-1"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/simple-liquid-glass@5.6.0/dist/web-component.esm.js"></script>
-  <script src="app.js?v=20261102-52"></script>
+  <script src="app.js?v=20261102-53"></script>
 </body>
 </html>
