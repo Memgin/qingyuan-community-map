@@ -398,7 +398,9 @@ input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 3px rgba(47,109,90
 .tag-chips .tag-chip { border: 1px solid rgba(25,43,42,.25); background: #fffdf6; padding: 5px 11px; font-size: 11px; color: var(--ink); cursor: pointer; }
 .tag-chips .tag-chip.on { background: var(--green); border-color: var(--green); color: #fff; }
 .spot-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0; }
-.spot-tags .tag-chip { padding: 2px 8px; background: rgba(47,109,90,.1); color: var(--green); font-size: 10px; font-weight: 700; }
+.spot-tags .tag-chip { padding: 2px 8px; background: rgba(47,109,90,.1); color: var(--green); font-size: 10px; font-weight: 700; border: 0; cursor: pointer; transition: background .15s; }
+.spot-tags .tag-chip:hover { background: rgba(47,109,90,.22); }
+#tagFilterChip { color: var(--green); font-weight: 700; }
 
 /* 详情页补图区块 */
 .detail-photo { margin-top: 12px; }

@@ -89,7 +89,10 @@ document.addEventListener("click", (event) => {
   const userButton = event.target.closest("[data-user-id]");
   if (userButton) { openUserProfile(userButton.dataset.userId); return; }
   const reviewDeleteButton = event.target.closest("[data-review-delete-id]");
-  if (reviewDeleteButton) { deleteMyReview(reviewDeleteButton.dataset.reviewDeleteId); }
+  if (reviewDeleteButton) { deleteMyReview(reviewDeleteButton.dataset.reviewDeleteId); return; }
+  // 卡片/弹窗上的子标签：点击按该子集分类筛选列表
+  const tagChipButton = event.target.closest("[data-tag-filter]");
+  if (tagChipButton) { setTagFilter(tagChipButton.dataset.tagFilter); return; }
   // 点击菜单外部时收起所有「⋯」菜单
   if (!event.target.closest(".more-menu-wrap")) document.querySelectorAll(".more-menu-wrap.open").forEach((el) => el.classList.remove("open"));
 });
@@ -117,7 +120,7 @@ document.querySelector("#correctionSubmit").addEventListener("click", async () =
 document.querySelector("#correctionCancel").addEventListener("click", exitCorrectionMode);
 let currentLocationMarker = null;
 
-const state = { spots: [], mapSpots: [], total: 0, filter: "all", query: "", page: 1, pageSize: 4, markers: [], likes: getLikes(), pickingLocation: false, myOnly: false, currentUser: null, authMode: "login", highlightIds: new Set(), myMaps: [], savedMapName: {}, openMapId: null, pickSpotId: null };
+const state = { spots: [], mapSpots: [], total: 0, filter: "all", query: "", page: 1, pageSize: 4, markers: [], likes: getLikes(), pickingLocation: false, myOnly: false, currentUser: null, authMode: "login", highlightIds: new Set(), myMaps: [], savedMapName: {}, openMapId: null, pickSpotId: null, tagFilter: "" };
 let nearbyFacilities = []; // 金融学院周边检索结果的缓存，防止登录/刷新合并时丢失
 const spotList = document.querySelector("#spotList");
 const spotCount = document.querySelector("#spotCount");
@@ -344,6 +347,24 @@ async function loadMapSpots() {
 }
 
 // 列表使用后端真分页：只取当前页，分类与关键词交由后端过滤；主页按综合热度排序（点赞+点评+导航）
+// 子标签筛选：再次点击同一标签或点筛选 chip 上的 × 取消；筛选后自动回到列表顶部
+function setTagFilter(tag) {
+  state.tagFilter = state.tagFilter === tag ? "" : tag;
+  state.page = 1;
+  updateTagFilterChip();
+  renderSkeletonList();
+  loadListPage();
+  const panel = document.querySelector(".recent-panel");
+  if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function updateTagFilterChip() {
+  const chip = document.querySelector("#tagFilterChip");
+  if (!chip) return;
+  chip.hidden = !state.tagFilter;
+  const label = chip.querySelector(".tag-filter-label");
+  if (label) label.textContent = state.tagFilter || "";
+}
+
 // 列表骨架屏：数据加载期间显示占位微光卡片，加载完成后被真实卡片替换
 function renderSkeletonList() {
   const spotList = document.querySelector("#spotList");
@@ -355,6 +376,7 @@ function renderSkeletonList() {
 async function loadListPage() {
   renderSkeletonList();
   const params = new URLSearchParams({ page: String(state.page), limit: String(state.pageSize), sort: "hot" });
+  if (state.tagFilter) params.set("tag", state.tagFilter);
   if (state.filter !== "all") params.set("category", state.filter);
   if (state.query) params.set("q", state.query);
   try {
@@ -634,6 +656,8 @@ document.querySelector("#clearRouteButton").addEventListener("click", () => {
   state.highlightIds = new Set();
   refreshList();
 });
+// 筛选状态 chip：点击取消子标签筛选
+document.querySelector("#tagFilterChip").addEventListener("click", () => setTagFilter(""));
 
 /* ---------------- 推荐路线暂存 + 路线编辑器（主地图大画布上调整顺序/增删点位） ---------------- */
 const ROUTE_DRAFT_KEY = "qingyuan-route-draft";
@@ -776,11 +800,12 @@ function popupContentHTML(spot) {
   return `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small>${tagLine ? `<div class="spot-tags">${tagLine}</div>` : ""}${ratingLine}<a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-nav-id="${spot.id}"><iconify-icon icon="ph:navigation-arrow" inline></iconify-icon> ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button"><iconify-icon icon="ph:map-pin" inline></iconify-icon> 位置纠偏</button><p>${description}</p></div>`;
 }
 
-// 客户端子标签解析：后端 tags 是 JSON 数组字符串，解析失败返回空
+// 客户端子标签解析：后端 tags 是 JSON 数组字符串，解析失败返回空；
+// 渲染为可点击按钮（点击按该子标签筛选列表）
 function parseSpotTagsClient(raw) {
   try {
     const list = typeof raw === "string" ? JSON.parse(raw) : Array.isArray(raw) ? raw : [];
-    return list.map((tag) => `<span class="tag-chip">${escapeHTML(String(tag))}</span>`).join("");
+    return list.map((tag) => `<button type="button" class="tag-chip" data-tag-filter="${escapeHTML(String(tag))}" title="点击筛选同类地点">${escapeHTML(String(tag))}</button>`).join("");
   } catch { return ""; }
 }
 
@@ -1140,6 +1165,10 @@ async function openEditModal(spot) {
     document.querySelector("#editImage").value = "";
     document.querySelector("#editImageNote").textContent = spot.image_url ? "当前已有主图：不选新图则保留原图，选了即替换" : "当前没有主图，可以上传一张";
     document.querySelector("#editMessage").textContent = "";
+    // 子标签预填：后端 tags 是 JSON 数组字符串，解析为逗号分隔展示
+    let tags = [];
+    try { tags = typeof spot.tags === "string" ? JSON.parse(spot.tags) : Array.isArray(spot.tags) ? spot.tags : []; } catch { tags = []; }
+    document.querySelector("#editTags").value = tags.join("，");
   }
   document.querySelector("#editWallImage").value = "";
   editBackdrop.hidden = false;
@@ -1204,6 +1233,9 @@ document.querySelector("#editForm").addEventListener("submit", async (event) => 
   submitButton.disabled = true; submitButton.textContent = "保存中…";
   try {
     const body = { category: document.querySelector("#editCategory").value };
+    // 子标签：逗号分隔输入，交给后端净化（最多 5 个、每个 ≤10 字）
+    const tagInput = document.querySelector("#editTags").value.trim();
+    body.tags = tagInput ? tagInput.split(/[,，、\s]+/).filter(Boolean) : [];
     const file = document.querySelector("#editImage").files[0];
     if (file) {
       if (file.size > 20 * 1024 * 1024) throw new Error("单张图片不能超过 20MB。");
@@ -1835,11 +1867,19 @@ const tagChips = document.querySelector("#tagChips");
 const tagCustomInput = document.querySelector("#tagCustomInput");
 const selectedTags = new Set();
 
-function renderTagChips(category) {
+async function renderTagChips(category) {
   const presets = TAG_PRESETS[category] || [];
-  tagChips.innerHTML = presets.length
-    ? presets.map((tag) => `<button type="button" class="tag-chip${selectedTags.has(tag) ? " on" : ""}" data-tag="${tag}">${tag}</button>`).join("")
-    : '<span class="field-note">该分类暂无建议标签，可直接在下方输入自定义标签</span>';
+  // 从后端聚合该分类下现存子标签（按使用次数排序）——用户输入新标签即「创建」子集分类
+  let existing = [];
+  try {
+    const response = await apiFetch(`${API_BASE}/tags?category=${encodeURIComponent(category)}`);
+    const payload = await response.json();
+    existing = (Array.isArray(payload.data) ? payload.data : []).map((item) => item.tag);
+  } catch { /* 聚合失败时只用预设标签 */ }
+  const suggestions = [...new Set([...presets, ...existing])];
+  tagChips.innerHTML = suggestions.length
+    ? suggestions.map((tag) => `<button type="button" class="tag-chip${selectedTags.has(tag) ? " on" : ""}" data-tag="${tag}">${tag}</button>`).join("")
+    : '<span class="field-note">该分类暂无建议标签，可直接在下方输入创建自定义子标签</span>';
   tagChips.querySelectorAll("button[data-tag]").forEach((button) => button.addEventListener("click", () => {
     const tag = button.dataset.tag;
     if (selectedTags.has(tag)) { selectedTags.delete(tag); button.classList.remove("on"); return; }

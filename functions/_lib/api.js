@@ -158,6 +158,7 @@ async function dispatch(request, env) {
     if (correctionHandleMatch && request.method === "POST") return handleCorrection(request, env, Number(correctionHandleMatch[1]));
     if (url.pathname === "/api/admin/amap-check" && request.method === "GET") return amapCheck(request, env);
     if (url.pathname === "/api/recommend" && request.method === "POST") return recommend(request, env);
+    if (url.pathname === "/api/tags" && request.method === "GET") return listSpotTags(request, env);
     return json({ error: "Not found" }, 404, env);
 }
 
@@ -176,6 +177,9 @@ async function listSpots(request, url, env) {
   const bindings = [];
   if (CATEGORIES.has(category)) { conditions.push("category = ?"); bindings.push(category); }
   if (query) { conditions.push("(name LIKE ? OR description LIKE ?)"); bindings.push(`%${query}%`, `%${query}%`); }
+  // 子标签筛选：tags 列存 JSON 数组字符串，按 "标签" 精确匹配；标签格式非法时忽略该参数
+  const tagFilter = url.searchParams.get("tag");
+  if (tagFilter && /^[\w\u4e00-\u9fff-]{1,10}$/.test(tagFilter)) { conditions.push("tags LIKE ?"); bindings.push(`%"${tagFilter}"%`); }
   if (since) { conditions.push("COALESCE(updated_at, created_at) > ?"); bindings.push(since); }
   const where = conditions.join(" AND ");
   // 排序：默认按加入时间；sort=likes 按点赞数；sort=hot 按综合热度（点赞×1 + 点评×2 + 导航×2）
@@ -1936,6 +1940,25 @@ function validateSpot(body) {
   const imageUrl = rawImageUrl ? normalizeImageURL(rawImageUrl) : "";
   if (rawImageUrl && !imageUrl) return { ok: false, error: "图片地址无效，请重新上传图片后再提交" };
   return { ok: true, value: { name: body.name.trim(), address: body.address.trim(), category: body.category, description: body.description.trim(), lat, lng, image_url: imageUrl, tags: tagList ? JSON.stringify(tagList) : "[]" } };
+}
+
+// GET /api/tags?category=xxx：聚合该分类下所有已上线点位的子标签（去重 + 使用次数排序），
+// 供提交表单的标签建议与筛选器展示——用户输入新标签即「创建」该分类下的子集分类
+async function listSpotTags(request, env) {
+  const category = new URL(request.url).searchParams.get("category");
+  if (!CATEGORIES.has(category)) return json({ error: "分类无效" }, 400, env);
+  const rows = await env.DB.prepare("SELECT tags FROM spots WHERE category = ? AND status = 'approved' AND tags IS NOT NULL AND tags != '[]'")
+    .bind(category).all().catch(() => ({ results: [] }));
+  const counts = {};
+  for (const row of rows.results || []) {
+    try {
+      for (const tag of JSON.parse(row.tags || "[]")) {
+        if (typeof tag === "string" && tag.trim()) counts[tag.trim()] = (counts[tag.trim()] || 0) + 1;
+      }
+    } catch { /* 忽略脏数据 */ }
+  }
+  const data = Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count);
+  return json({ data }, 200, env);
 }
 
 // 归一化图片地址：/api/uploads 返回的是含域名的绝对 URL，此处提取出

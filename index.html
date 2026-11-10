@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css">
-  <link rel="stylesheet" href="style.css?v=20261109-42">
+  <link rel="stylesheet" href="style.css?v=20261109-43">
   <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js"></script>
 </head>
 <body>
@@ -107,6 +107,7 @@
       <p id="recommendResult" class="recommend-result" role="status"></p>
       <p id="routeOrder" class="recommend-result" hidden></p>
       <button class="text-button" id="routeEditorButton" type="button" hidden><iconify-icon icon="ph:pencil-simple" inline></iconify-icon> 编辑路线</button>
+      <button class="filter-chip active" id="tagFilterChip" type="button" hidden><iconify-icon icon="ph:tag" inline></iconify-icon> <span class="tag-filter-label"></span> <iconify-icon icon="ph:x" inline></iconify-icon></button>
       <button class="text-button" id="clearRouteButton" type="button" hidden><iconify-icon icon="ph:broom" inline></iconify-icon> 清除推荐路线</button>
       <div id="guideMap" class="guide-map"></div>
     </section>
@@ -188,6 +189,7 @@
         </div>
         <div id="ownerEditSection" hidden>
           <label>地点分类<select name="category" id="editCategory"></select></label>
+          <label>子标签（可选，逗号分隔，最多 5 个）<input type="text" name="tags" id="editTags" maxlength="60" placeholder="例如：早茶，老字号"></label>
           <label>更换主图<input type="file" name="image" accept="image/*" id="editImage"></label>
           <p class="field-note" id="editImageNote"></p>
           <button class="primary-button full-width" type="submit">保存修改</button>
@@ -312,6 +314,6 @@
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder"></script>
   <script src="demo-data.js?v=20261102-1"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/simple-liquid-glass@5.6.0/dist/web-component.esm.js"></script>
-  <script src="app.js?v=20261102-51"></script>
+  <script src="app.js?v=20261102-52"></script>
 </body>
 </html>

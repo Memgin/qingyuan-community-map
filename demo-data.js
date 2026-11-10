@@ -29,14 +29,14 @@
   ];
 
   const seedSpots = [
-    { id: 1, name: "老桥饭店", address: "清远市清城区下廓一街", category: "food", description: "招牌白切清远鸡，皮爽肉滑，蘸姜葱蓉一流，本地人的饭堂。", lat: 23.6815, lng: 113.0562, image_url: null, likes: 46, user_id: 1, created_at: "2026-10-12 11:30:00" },
-    { id: 2, name: "洲心大眼球烧肉粽", address: "清远市清城区洲心街", category: "food", description: "烧肉粽糯米油润，肥肉入口即化，早晨出摊即排队。", lat: 23.6602, lng: 113.0841, image_url: null, likes: 38, user_id: 6, created_at: "2026-10-13 08:05:00" },
-    { id: 3, name: "北江河鲜舫", address: "清远市清城区北江一路", category: "food", description: "江景河鲜，边吃边看北江，黄骨鱼和河虾是必点。", lat: 23.6905, lng: 113.0502, image_url: null, likes: 31, user_id: 2, created_at: "2026-10-15 18:40:00" },
-    { id: 4, name: "龙塘豆豉鸡大排档", address: "清远市清城区龙塘镇", category: "food", description: "豆豉炒鸡镬气十足，人均 40 吃到扶墙。", lat: 23.6310, lng: 113.1015, image_url: null, likes: 27, user_id: 5, created_at: "2026-10-18 19:12:00" },
-    { id: 5, name: "笔架山森林公园", address: "清远市清城区笔架山林场", category: "scenic", description: "市区边的登山步道，山顶可俯瞰全城，适合半天轻徒步。", lat: 23.7305, lng: 113.0710, image_url: null, likes: 52, user_id: 4, created_at: "2026-10-20 09:00:00" },
-    { id: 6, name: "飞来湖公园", address: "清远市清城区飞来湖", category: "scenic", description: "环湖绿道加湿地栈道，傍晚看日落的人最多。", lat: 23.6930, lng: 113.0298, image_url: null, likes: 44, user_id: 2, created_at: "2026-10-22 16:20:00" },
-    { id: 7, name: "城市广场", address: "清远市清城区先锋中路", category: "shopping", description: "老牌商圈，吃饭看电影一站解决，周末人多。", lat: 23.6820, lng: 113.0610, image_url: null, likes: 19, user_id: 3, created_at: "2026-10-25 14:45:00" },
-    { id: 8, name: "太和古洞", address: "清远市清新区太和古洞旅游区", category: "scenic", description: "清幽山谷里的古道观，溪水台阶一路向上，夏天避暑首选。", lat: 23.7120, lng: 113.0180, image_url: null, likes: 35, user_id: 4, created_at: "2026-10-28 10:30:00" }
+    { id: 1, name: "老桥饭店", address: "清远市清城区下廓一街", category: "food", tags: ["白切鸡", "老字号", "饭堂"], description: "招牌白切清远鸡，皮爽肉滑，蘸姜葱蓉一流，本地人的饭堂。", lat: 23.6815, lng: 113.0562, image_url: null, likes: 46, user_id: 1, created_at: "2026-10-12 11:30:00" },
+    { id: 2, name: "洲心大眼球烧肉粽", address: "清远市清城区洲心街", category: "food", tags: ["烧肉粽", "早餐"], description: "烧肉粽糯米油润，肥肉入口即化，早晨出摊即排队。", lat: 23.6602, lng: 113.0841, image_url: null, likes: 38, user_id: 6, created_at: "2026-10-13 08:05:00" },
+    { id: 3, name: "北江河鲜舫", address: "清远市清城区北江一路", category: "food", tags: ["河鲜", "江景"], description: "江景河鲜，边吃边看北江，黄骨鱼和河虾是必点。", lat: 23.6905, lng: 113.0502, image_url: null, likes: 31, user_id: 2, created_at: "2026-10-15 18:40:00" },
+    { id: 4, name: "龙塘豆豉鸡大排档", address: "清远市清城区龙塘镇", category: "food", tags: ["大排档", "小炒"], description: "豆豉炒鸡镬气十足，人均 40 吃到扶墙。", lat: 23.6310, lng: 113.1015, image_url: null, likes: 27, user_id: 5, created_at: "2026-10-18 19:12:00" },
+    { id: 5, name: "笔架山森林公园", address: "清远市清城区笔架山林场", category: "scenic", tags: ["登山", "亲子"], description: "市区边的登山步道，山顶可俯瞰全城，适合半天轻徒步。", lat: 23.7305, lng: 113.0710, image_url: null, likes: 52, user_id: 4, created_at: "2026-10-20 09:00:00" },
+    { id: 6, name: "飞来湖公园", address: "清远市清城区飞来湖", category: "scenic", tags: ["日落", "散步"], description: "环湖绿道加湿地栈道，傍晚看日落的人最多。", lat: 23.6930, lng: 113.0298, image_url: null, likes: 44, user_id: 2, created_at: "2026-10-22 16:20:00" },
+    { id: 7, name: "城市广场", address: "清远市清城区先锋中路", category: "shopping", tags: ["老牌商圈"], description: "老牌商圈，吃饭看电影一站解决，周末人多。", lat: 23.6820, lng: 113.0610, image_url: null, likes: 19, user_id: 3, created_at: "2026-10-25 14:45:00" },
+    { id: 8, name: "太和古洞", address: "清远市清新区太和古洞旅游区", category: "scenic", tags: ["登山", "避暑"], description: "清幽山谷里的古道观，溪水台阶一路向上，夏天避暑首选。", lat: 23.7120, lng: 113.0180, image_url: null, likes: 35, user_id: 4, created_at: "2026-10-28 10:30:00" }
   ];
 
   // 点评种子：anonymous 为 true 的条目在任何接口都不带作者信息
@@ -156,6 +156,22 @@
   /* ---------------- 路由 ---------------- */
   async function route(url, method, body, options, viewer) {
     const path = url.pathname;
+    // 子标签聚合：与真实后端一致，按分类聚合已上线点位的 tags 并按使用次数排序
+    if (path === "/api/tags" && method === "GET") {
+      const category = url.searchParams.get("category");
+      const counts = {};
+      for (const spot of store.spots) {
+        if (spot.category !== category || spot.status === "rejected") continue;
+        for (const tag of Array.isArray(spot.tags) ? spot.tags : []) counts[tag] = (counts[tag] || 0) + 1;
+      }
+      return json({ data: Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count) });
+    }
+    // 子标签筛选：列表接口支持 tag 参数（JSON 数组字符串的精确匹配）
+    if (path === "/api/spots" && method === "GET" && url.searchParams.get("tag")) {
+      const tag = url.searchParams.get("tag");
+      const filtered = store.spots.filter((spot) => spot.status === "approved" && Array.isArray(spot.tags) && spot.tags.includes(tag));
+      return json({ data: filtered, total: filtered.length });
+    }
     const spotReviews = path.match(/^\/api\/spots\/(\d+)\/reviews$/);
     if (spotReviews && method === "GET") {
       const reviews = store.reviews.filter((review) => review.spot_id === Number(spotReviews[1]))
