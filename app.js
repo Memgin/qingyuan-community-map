@@ -381,17 +381,19 @@ async function loadListPage() {
   if (state.query) params.set("q", state.query);
   try {
     const response = await apiFetch(`${API_BASE}/spots?${params}`);
-    if (!response.ok) return;
+    if (!response.ok) { render(); return; }
     const payload = await response.json();
     if (Array.isArray(payload.data)) {
       state.spots = payload.data.map((spot) => ({ ...spot, locationVerified: true }));
       state.total = Number(payload.total || 0);
       writeCache(LIST_CACHE_KEY, { list: state.spots, total: state.total });
     }
+    render();
   } catch {
-    // 断网时展示上一次缓存的列表
+    // 断网时展示上一次缓存的列表；无论成败都必须结束骨架屏
     const cache = readCache(LIST_CACHE_KEY);
     if (cache && Array.isArray(cache.list)) { state.spots = cache.list; state.total = Number(cache.total || cache.list.length); }
+    render();
   }
 }
 
