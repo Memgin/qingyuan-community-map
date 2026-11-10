@@ -25,11 +25,18 @@
 - **高德自动核验**：名称命中高德 POI 即**自动上线**，无需人工审核；坐标由高德结果自动校正，用户不必精确点选
 - **重复拦截**：同名同分类、或坐标距离小于 0.001 度会被判为重复提交
 
+### 子集分类（自定义子标签）
+- **六大分类下自由细分**：每个点位可挂最多 5 个子标签（如美食下的「早茶 / 烧肉粽 / 河鲜」），一个地点可拥有多个
+- **创建即沉淀**：提交表单的标签建议来自该分类下现存标签聚合（`/api/tags` 按使用次数排序）+ 预设建议 + 自定义输入，用户输入新标签即「创建」子集分类
+- **点击即筛选**：卡片 / 弹窗 / 详情上的标签可点击，按子标签筛选列表（后端 `tag` 参数精确匹配），筛选状态以可取消的 chip 展示
+- **编辑与管理**：点位作者在编辑弹窗以 chips 编辑器增删（单个 × 删除 / 回车逗号添加 / 重复与超限就地提示）；管理员在后台全部点位表格**行内编辑**（失焦即保存）
+- **增量同步**：子标签变更更新 `updated_at`，App 端自动同步
+
 ### 互动
 - **点赞 / 举报**：登录用户按账号记录，网页端与 App 状态一致
 - **我的提交**：查看自己提交的点位及其审核状态
 - **位置纠偏**：发现点位坐标偏了？登录后在地图弹窗点「位置纠偏」，把蓝色标记拖到正确位置提交，管理员确认后全端生效
-- **社区照片墙**：图钉弹窗内展示社区成员补充的照片，任何登录用户可「补图」
+- **社区照片墙**：详情面板以 **Carousel 自动轮播**展示社区照片（触摸滑动 / 圆点导航 / 点击放大灯箱），任何登录用户可「补图」，上传后轮播自动刷新
 
 ### 私人地图
 - **多地图 + 收藏选择器**：创建多张主题地图；收藏时多图弹出选择器（可当场新建），重复收藏有提示，卡片显示「已收藏 ✓」
@@ -50,15 +57,14 @@
 - **写入限流**：每账号每小时 20 条
 
 ### 账号与安全
-- **注册 / 登录**：用户名 + 密码，PBKDF2 加盐哈希存储；注册在独立页 `register.html` 完成，需通过 Turnstile 人机验证（其脚本注入的 CSP 会干扰地图渲染，故与主页隔离）；App 原生注册走免验证限额（同 IP 每天 1 个）
+- **注册页改版**（独立页 `register.html`）：用户名 + 手机号（11 位，全库唯一，即时查重）+ 密码 + 确认密码（一致性即时提示、可见性切换、三档强度条）；用户名输入 600ms 防抖实时查重（`/api/auth/check-username`），单字立即提醒；注册后统一转小写保存（登录兼容旧大写账号）
+- **人机验证双模**：配置 `TURNSTILE_SECRET` 时用 Cloudflare Turnstile；未配置时用「点击一下即确认」轻量验证（服务端校验停留时长）——两种均保留 IP 注册频控（同 IP 24h 3 个账号，免验证每天 1 个）；App 原生注册走免验证限额
+- **演示模式对齐**：本地演示与真实后端行为一致——账号必须存在且密码正确，不再任意建号（演示账号统一密码 `demo123456`）
+- **手机号自助找回密码**：登录弹窗「忘记密码」→ 用户名 + 手机号 + 新密码，核验通过立即改密并**作废全部旧会话**；按 IP 限流 5 次/时、统一错误话术不暴露账号存在；未绑手机号的账号仍走原「人工审核找回」通道
+- **个人资料加固**：昵称剔除零宽/控制字符、保留字黑名单（admin/官方/客服…）、不得与他人用户名重复、全库查重、改名写入历史表；头像经 `?purpose=avatar` 强制 ≤2MB + 文件头校验 + 最小分辨率 64×64，只允许站内地址，支持「移除头像」；资料保存限流 10 次/时
+- **隐私保护**：点评、照片墙、公开主页、协作者接口一律不再返回 `username`，对外只展示「昵称 + 用户 ID」；公开主页注册时间只到日期
 - **密码策略**：仅注册和设置新密码时校验（8 位以上含字母数字），登录只做比对，不追溯旧密码
-- **找回密码全流程**（全自动闭环）：
-  1. 用户提交重置申请（防用户名枚举：无论账号是否存在返回相同文案）
-  2. 管理员后台审批 → 密码重置为 `12345` 并**踢掉该用户所有登录会话**
-  3. Push Kit 推送临时密码到用户手机（App 未打开也能收到）
-  4. 用户用临时密码登录 → **强制弹出改密窗**，未改密前所有写操作（点赞/提交/收藏等）一律 403 拦截
-  5. 设置新密码后立即恢复全部功能
-- **设备送达预检（防账号接管）**：临时密码是公开值，因此审批时先检查账号是否有绑定的推送设备——没有则拒绝自动重置，转人工核验；确保密码永远只回到失主本人登录过的设备上
+- **找回密码（人工通道，全自动闭环）**：重置申请 → 管理员审批 → 密码重置为 `12345` 并踢掉全部会话 → Push Kit 推送临时密码 → 强制改密窗（未改密前写操作一律 403）；**设备送达预检**：无绑定推送设备的账号拒绝自动重置，转人工核验
 
 ### 消息推送
 - **华为 Push Kit**：审核结果（通过/驳回）、密码重置通知实时推送到用户所有设备
@@ -76,16 +82,21 @@
 ### 管理后台
 标签页布局，六个板块，密钥在会话内自动记忆：
 - **① 待审核点位**：通过 / 拒绝
-- **② 全部点位**：表格化布局，按名称/地址搜索、**彩色圆点分类筛选**、状态筛选、**行内修改分类**（选择即保存并触发增量同步）、删除违规内容（级联清理点评 / 点赞 / 举报 / 收藏）
+- **② 全部点位**：表格化布局，按名称/地址搜索、**彩色圆点分类筛选**、状态筛选、**行内修改分类与子标签**（失焦即保存并触发增量同步）、**数据概览图表**（Chart.js：分类分布 + 热度 Top 10 三段堆叠）、删除违规内容（级联清理点评 / 点赞 / 举报 / 收藏）
 - **③ 举报处理**
 - **④ 账号与密码**：密码重置申请审批（一键同意并推送临时密码；无法安全送达的可删除转人工）、手动重置密码
 - **⑤ 位置纠偏**：审批用户提交的坐标修正（新旧坐标对照，同意即移动点位）
 - **⑥ 诊断工具**：高德接口自检（不暴露 Key）
 
 ### 界面
-- **移动端重排**：手机动线 flex+order 布局——LOCAL/01 品牌区（压缩版）→ 详情 / 路线编辑面板（打开时贴地图上方）→ 大地图（62svh）→ 热门地点 → AI 向导 → 私人地图；季节按钮窄屏竖排每行一个
+- **苹果风设计语言**：SF 系统字体栈、三档圆角令牌（10/14/22px）、柔和多层阴影、胶囊按钮、毛玻璃 toast、克制的莫兰迪分类色系（低饱和在地图底色上耐看不刺眼）
+- **图标系统**：全站 emoji 由 [Iconify](https://iconify.design/)（Phosphor 图标集，CDN 按需加载）替代——分类图标、互动行、应急、导航、按钮统一线性风格
+- **地图图钉**：Google Maps 风格水滴形——分类色圆头 + 白图标 + 正下尖角 + 落地投影，高亮态珊瑚色脉冲光环；莫兰迪配色与图例 / 卡片 / 图表全局一致
+- **动画与骨架屏**：Animate.css 动画基座；列表加载显示微光骨架占位卡（翻页 / 筛选 / 搜索生效）
+- **详情照片轮播**：社区照片 Carousel 自动轮播（4s/张、触摸滑动、圆点导航）+ 点击放大灯箱（全屏查看 / 左右切换 / Esc 关闭）
+- **移动端重排**：手机动线 flex+order 布局——LOCAL/01 品牌区（压缩版）→ 详情 / 路线编辑面板（打开时贴地图上方）→ 大地图（62svh）→ 热门地点 → AI 向导 → 私人地图；季节按钮窄屏竖排每行一个；私人地图面板与 AI 向导同款头部左右分栏布局
 - **液态玻璃**：顶栏接入 [simple-liquid-glass](https://github.com/lucaperullo/simple-liquid-glass)（CDN 锁定 5.6.0，Web Component 纯视觉层，`pointer-events: none` 不拦截交互，CDN 失败自动降级为半透明底色）
-- **地点卡片**：封面锚点（无图用分类色渐变占位）+ 评分元信息行 + 聚合互动行；次要操作（收藏/补图/编辑/举报/删除）收进「⋯」菜单
+- **地点卡片**：封面锚点（无图用分类色渐变 + 图标占位）+ 评分元信息行 + 子标签行 + 聚合互动行；次要操作（收藏/补图/编辑/举报/删除）收进「⋯」菜单
 
 ### 多端同步与离线能力
 | 能力 | 说明 |
@@ -159,7 +170,7 @@ npx wrangler pages secret put PUSH_CLIENT_SECRET # 华为推送 Client Secret
 npx wrangler d1 execute qingyuan-community-map --remote --file=worker/schema.sql
 ```
 
-迁移脚本统一放在 `migrations/` 目录，按时间 / 主题顺序执行（早期：auth → owner → moderation → quotas → category-school；近期：security → registration → pwd-flow → push → photos → correction → reviews → ai-cache → nav-stats → share → trash → collab）。`worker/` 保留独立 Worker 工程本体（`src/` + `wrangler.toml` + `schema.sql`）。
+迁移脚本统一放在 `migrations/` 目录，按时间 / 主题顺序执行（早期：auth → owner → moderation → quotas → category-school；近期：security → registration → pwd-flow → push → photos → correction → reviews → ai-cache → nav-stats → share → trash → collab → spots-tags → profile-hardening → phone）。`worker/` 保留独立 Worker 工程本体（`src/` + `wrangler.toml` + `schema.sql`）。
 
 ### 4. 部署
 
@@ -177,7 +188,8 @@ npx wrangler pages deploy . --project-name qymap --branch main
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/spots?page=&limit=&category=&q=&since=&sort=&fields=` | 点位列表（附带 `avg_rating` / `review_count` / `hot_score`，未迁移旧库自动降级）；`sort=hot` 综合热度、`sort=likes` 点赞、默认时间序；`fields=map` 返回图钉轻量字段 |
+| GET | `/spots?page=&limit=&category=&q=&tag=&since=&sort=&fields=` | 点位列表（附带 `avg_rating` / `review_count` / `hot_score` / `tags`，未迁移旧库自动降级）；`tag=` 子标签筛选、`sort=hot` 综合热度、`sort=likes` 点赞、默认时间序；`fields=map` 返回图钉轻量字段 |
+| GET | `/tags?category=` | 聚合该分类下所有已上线点位的子标签（去重 + 使用次数排序），供标签建议与筛选展示 |
 | POST | `/spots` | 提交点位（需登录 + `X-Owner-Token`），支持 `client_token` 幂等 |
 | DELETE | `/spots/:id` | 删除自己提交的点位 |
 | POST | `/spots/:id/like` | 点赞（登录时按账号记录） |
@@ -192,12 +204,14 @@ npx wrangler pages deploy . --project-name qymap --branch main
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| POST | `/auth/register` `/auth/login` `/auth/logout` | 注册（网页端强制 Turnstile）/ 登录 / 退出 |
-| POST | `/auth/profile` | 设置昵称与头像（需登录） |
-| GET | `/users/:id/profile` | 用户公开主页（仅聚合非匿名点评，匿名内容无法反查） |
-| GET | `/auth/me` | 当前用户（含 `mustChangePassword` 标志、昵称头像） |
+| POST | `/auth/register` `/auth/login` `/auth/logout` | 注册（手机号必填 + 人机验证双模）/ 登录 / 退出；用户名统一小写 |
+| POST | `/auth/profile` | 设置昵称（保留字/查重/净化）与头像（站内地址）、换绑手机号（需登录） |
+| GET | `/auth/check-username`、`/auth/check-phone` | 用户名 / 手机号占用检查（注册页防抖调用） |
+| GET | `/users/:id/profile` | 用户公开主页（仅聚合非匿名点评，响应不含 username） |
+| GET | `/auth/me` | 当前用户（含 `mustChangePassword` 标志、昵称头像、脱敏手机号） |
 | POST | `/auth/change-password` | 设置新密码（临时密码登录后强制调用） |
-| POST | `/auth/reset-request` | 提交找回密码申请（无需登录） |
+| POST | `/auth/reset-password` | 手机号自助找回：`{ username, phone, newPassword }`（IP 限流 5 次/时，成功后作废全部旧会话） |
+| POST | `/auth/reset-request` | 提交找回密码申请（人工通道，无需登录；未绑手机号账号使用） |
 | POST / DELETE | `/push-token` | 上报 / 注销设备推送 Token（需登录） |
 
 ### 其他
@@ -220,6 +234,7 @@ npx wrangler pages deploy . --project-name qymap --branch main
 | GET | `/admin/spots/all?status=&q=` | 管理：任意状态点位列表 |
 | DELETE | `/admin/spots/:id` | 管理：删除点位（级联清理） |
 | POST | `/admin/spots/:id/category` | 管理：修改点位分类（更新 `updated_at` 触发增量同步） |
+| POST | `/admin/spots/:id/tags` | 管理：修改点位子标签（最多 5 个，净化后入库） |
 | GET | `/admin/amap-check` | 管理：高德接口自检 |
 | GET | `/admin/reset-requests` | 管理：待审批密码重置申请 |
 | POST | `/admin/reset-requests/:id/handle` | 管理：同意申请（重置 + 推送临时密码 + 踢会话） |
@@ -237,7 +252,7 @@ npx wrangler pages deploy . --project-name qymap --branch main
 ```
 .
 ├── index.html          前端主页
-├── register.html       独立注册页（Turnstile 与主页隔离）
+├── register.html       独立注册页（手机号 / 实时查重 / 强度条 / 人机验证双模）
 ├── recent.html         最近加入页（时间倒序 + 分类筛选）
 ├── all.html            全部地点页（网格浏览 + 评分入口）
 ├── shared.html         私人地图只读分享页（按令牌访问）
@@ -252,9 +267,9 @@ npx wrangler pages deploy . --project-name qymap --branch main
 │   ├── api/[[path]].js 路由入口
 │   └── _lib/api.js     全部接口实现
 ├── worker/             独立 Worker 工程本体（src + wrangler.toml + schema.sql）
-├── migrations/         全部数据库迁移脚本（23 个，按时间顺序执行）
-├── docs/               项目文档（规划 / 评估 / 修复记录 / 功能清单）
-├── tools/              本地开发工具（serve_local.py + 启动本地服务.bat）
+├── migrations/         全部数据库迁移脚本（26 个，按时间顺序执行）
+├── docs/               项目文档（规划 / 评估 / 功能清单 / 重构计划）
+├── tools/              本地开发工具（serve_local.py 静态预览、local_backend_server.mjs 完整后端模拟、启动本地服务.bat）
 ├── wrangler.toml       Cloudflare Pages 配置
 └── README.md
 ```

@@ -20,3 +20,6 @@ Thumbs.db
 
 # 本地 UI 预览截图（iPhone 视口，仅供开发查看）
 预览-iPhone/
+
+# 比赛材料（本地保留，不入仓库）
+compete/
