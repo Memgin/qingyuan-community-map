@@ -1317,9 +1317,10 @@ async function updateProfile(request, env) {
     updates.nickname = nickname;
   }
   if (body.avatar_url !== undefined) {
-    const url = String(body.avatar_url || "").trim();
-    // 头像只允许站内上传地址：外链可能是追踪像素、超大图、钓鱼图或失效链接
-    if (url && !/^\/api\/images\//.test(url)) return json({ error: "头像地址无效，请使用站内上传的图片" }, 400, env);
+    // 头像只允许站内上传地址（normalizeImageURL 会把 /api/uploads 返回的绝对 URL
+    // 归一化为 /api/images/ 相对路径入库——域名无关；外链可能是追踪像素/钓鱼图，一律拒绝）
+    const url = normalizeImageURL(body.avatar_url);
+    if (body.avatar_url && !url) return json({ error: "头像地址无效，请使用站内上传的图片" }, 400, env);
     updates.avatar_url = url || null;
   }
   if (body.phone !== undefined) {
