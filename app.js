@@ -2175,7 +2175,7 @@ document.querySelector("#detailPhotoTrack").addEventListener("click", (event) =>
   const img = event.target.closest("img");
   if (!img) return;
   stopPhotoAutoPlay();
-  openPhotoLightbox(Number(img.dataset.lightboxIndex) || detailPhotoIndex);
+  openPhotoLightbox(Number(img.dataset.lightboxIndex));
 });
 // 触摸滑动：左右划切换
 (() => {
@@ -2194,9 +2194,10 @@ let lightboxIndex = 0;
 
 function openPhotoLightbox(index) {
   if (!detailPhotos.length) return;
-  lightboxIndex = index;
-  updateLightbox();
+  // 先显示灯箱再更新内容：updateLightbox 有 hidden 守卫，顺序颠倒会导致 src 永远不设置
   photoLightbox.hidden = false;
+  lightboxIndex = ((index % detailPhotos.length) + detailPhotos.length) % detailPhotos.length;
+  updateLightbox();
 }
 function updateLightbox() {
   if (photoLightbox.hidden) return;
