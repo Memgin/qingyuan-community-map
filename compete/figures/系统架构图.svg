@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650">
+  <style>
+    text{font-family:"Microsoft YaHei","Noto Sans CJK SC",sans-serif;fill:#243447}
+    .title{font-size:28px;font-weight:700}.label{font-size:20px;font-weight:700}.small{font-size:16px}
+    .box{stroke:#315b78;stroke-width:2;rx:14}.front{fill:#eaf3f7}.service{fill:#e9f1e8}.data{fill:#fff1df}.external{fill:#f4e9ef}
+    .arrow{stroke:#5a7184;stroke-width:3;fill:none;marker-end:url(#m)}
+  </style>
+  <defs><marker id="m" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 z" fill="#5a7184"/></marker></defs>
+  <text x="600" y="45" text-anchor="middle" class="title">清远社区共享地图系统架构</text>
+  <rect x="45" y="105" width="220" height="125" class="box front"/>
+  <text x="155" y="145" text-anchor="middle" class="label">Web 前端</text><text x="155" y="178" text-anchor="middle" class="small">地图浏览与搜索</text><text x="155" y="204" text-anchor="middle" class="small">提交、评价、推荐</text>
+  <rect x="45" y="330" width="220" height="125" class="box front"/>
+  <text x="155" y="370" text-anchor="middle" class="label">管理后台</text><text x="155" y="403" text-anchor="middle" class="small">审核与举报处理</text><text x="155" y="429" text-anchor="middle" class="small">账号与接口诊断</text>
+  <rect x="395" y="190" width="300" height="220" class="box service"/>
+  <text x="545" y="235" text-anchor="middle" class="label">Cloudflare Pages Functions</text><text x="545" y="275" text-anchor="middle" class="small">认证与权限</text><text x="545" y="305" text-anchor="middle" class="small">地点与评价接口</text><text x="545" y="335" text-anchor="middle" class="small">地图与推荐接口</text><text x="545" y="365" text-anchor="middle" class="small">上传、限流与数据校验</text>
+  <rect x="850" y="95" width="260" height="110" class="box data"/>
+  <text x="980" y="135" text-anchor="middle" class="label">D1 数据库</text><text x="980" y="170" text-anchor="middle" class="small">地点、用户、评价、地图</text>
+  <rect x="850" y="265" width="260" height="110" class="box data"/>
+  <text x="980" y="305" text-anchor="middle" class="label">R2 对象存储</text><text x="980" y="340" text-anchor="middle" class="small">封面、照片与头像</text>
+  <rect x="850" y="435" width="260" height="110" class="box external"/>
+  <text x="980" y="475" text-anchor="middle" class="label">外部服务</text><text x="980" y="510" text-anchor="middle" class="small">高德、AI、Push Kit</text>
+  <path d="M265 165 H388" class="arrow"/><path d="M265 390 H350 V350 H388" class="arrow"/><path d="M702 240 H840" class="arrow"/><path d="M702 325 H840" class="arrow"/><path d="M702 380 H780 V490 H840" class="arrow"/>
+  <text x="330" y="150" class="small">HTTPS / JSON</text><text x="720" y="225" class="small">读写</text><text x="720" y="310" class="small">上传</text><text x="720" y="465" class="small">调用</text>
+</svg>

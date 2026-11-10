@@ -10,13 +10,22 @@
   const DEMO_TOKEN = "demo-token";
 
   /* ---------------- 演示数据种子 ---------------- */
+  // 演示账号统一密码（仅存在于本地演示环境，线上不使用）：
+  const DEMO_PASSWORD = "demo123456";
+  // 手机号归一化与脱敏：与真实后端规则一致
+  function normalizePhone(value) {
+    let phone = String(value ?? "").replace(/[\s-]/g, "");
+    if (/^\+?86(?=\d{11}$)/.test(phone)) phone = phone.replace(/^\+?86/, "");
+    return /^1[3-9]\d{9}$/.test(phone) ? phone : null;
+  }
+  function maskPhone(phone) { return phone ? `${String(phone).slice(0, 3)}****${String(phone).slice(-4)}` : null; }
   const seedUsers = [
-    { id: 1, username: "chen_foodie", nickname: "北江食客", avatar_url: null, created_at: "2026-08-12 09:20:00" },
-    { id: 2, username: "lq_local", nickname: "清远小灵通", avatar_url: null, created_at: "2026-08-30 21:04:00" },
-    { id: 3, username: "may_eats", nickname: "阿May食记", avatar_url: null, created_at: "2026-09-05 12:40:00" },
-    { id: 4, username: "hiker_lin", nickname: "山系少年", avatar_url: null, created_at: "2026-09-18 08:15:00" },
-    { id: 5, username: "laoqingyuan", nickname: "老清远", avatar_url: null, created_at: "2026-09-26 17:32:00" },
-    { id: 6, username: "zhouxin_gm", nickname: "洲心阿婆", avatar_url: null, created_at: "2026-10-02 10:10:00" }
+    { id: 1, username: "chen_foodie", nickname: "北江食客", avatar_url: null, password: DEMO_PASSWORD, phone: "13812340001", created_at: "2026-08-12 09:20:00" },
+    { id: 2, username: "lq_local", nickname: "清远小灵通", avatar_url: null, password: DEMO_PASSWORD, phone: "13812340002", created_at: "2026-08-30 21:04:00" },
+    { id: 3, username: "may_eats", nickname: "阿May食记", avatar_url: null, password: DEMO_PASSWORD, phone: "13812340003", created_at: "2026-09-05 12:40:00" },
+    { id: 4, username: "hiker_lin", nickname: "山系少年", avatar_url: null, password: DEMO_PASSWORD, phone: "13812340004", created_at: "2026-09-18 08:15:00" },
+    { id: 5, username: "laoqingyuan", nickname: "老清远", avatar_url: null, password: DEMO_PASSWORD, phone: "13812340005", created_at: "2026-09-26 17:32:00" },
+    { id: 6, username: "zhouxin_gm", nickname: "洲心阿婆", avatar_url: null, password: DEMO_PASSWORD, phone: "13812340006", created_at: "2026-10-02 10:10:00" }
   ];
 
   const seedSpots = [
@@ -77,6 +86,8 @@
           if (!store.nextMapId) store.nextMapId = 1;
           if (!store.collab || typeof store.collab !== "object") store.collab = {};
           if (!store.nextUserId) store.nextUserId = 1000;
+          // 旧版本演示数据没有密码字段，统一补默认密码，保证「登录必须密码正确」对存量数据也生效
+          store.users.forEach((user) => { if (typeof user.password !== "string") user.password = DEMO_PASSWORD; });
           return store;
         }
       }
@@ -215,30 +226,70 @@
         updates.nickname = nickname || null;
       }
       if (body.avatar_url !== undefined) updates.avatar_url = String(body.avatar_url || "") || null;
+      if (body.phone !== undefined) {
+        const phone = normalizePhone(body.phone);
+        if (!phone) return json({ error: "手机号格式不正确：请输入 11 位大陆手机号" }, 400);
+        if (store.users.some((u) => u.phone === phone && u.id !== viewer.id)) return json({ error: "该手机号已绑定其他账号" }, 409);
+        updates.phone = phone;
+      }
       Object.assign(viewer, updates);
       const record = userById(viewer.id);
       if (record) Object.assign(record, updates);
       persist();
-      return json({ user: { id: viewer.id, username: viewer.username, nickname: viewer.nickname || null, avatar_url: viewer.avatar_url || null } });
+      return json({ user: { id: viewer.id, username: viewer.username, nickname: viewer.nickname || null, avatar_url: viewer.avatar_url || null, phone: maskPhone(viewer.phone) } });
     }
     if (path === "/api/auth/me" && method === "GET") {
-      return json({ user: viewer ? { id: viewer.id, username: viewer.username, nickname: viewer.nickname || null, avatar_url: viewer.avatar_url || null } : null });
+      return json({ user: viewer ? { id: viewer.id, username: viewer.username, nickname: viewer.nickname || null, avatar_url: viewer.avatar_url || null, phone: maskPhone(viewer.phone) } : null });
+    }
+    if (path === "/api/auth/register" && method === "POST") {
+      const username = String(body.username || "").trim().toLowerCase();
+      if (!username || !/^[\w\u4e00-\u9fff-]{2,24}$/.test(username)) return json({ error: "用户名需为 2-24 个字符（支持中文、字母、数字、下划线、连字符）" }, 400);
+      if (typeof body.password !== "string" || body.password.length < 8 || !/[A-Za-z]/.test(body.password) || !/\d/.test(body.password)) return json({ error: "密码至少 8 位，需同时包含字母和数字" }, 400);
+      // 手机号：与真实后端一致，网页端注册必填，用于忘记密码自助找回
+      const phone = normalizePhone(body.phone);
+      if (!phone) return json({ error: "请填写 11 位大陆手机号（用于忘记密码时找回账号）" }, 400);
+      // 用户名唯一：已存在的用户名不可重复注册；手机号同样唯一
+      if (store.users.some((u) => u.username === username && u.id !== 999)) return json({ error: "用户名已存在" }, 409);
+      if (store.users.some((u) => u.phone === phone)) return json({ error: "该手机号已绑定其他账号" }, 409);
+      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const user = { id: store.nextUserId++, username, nickname: null, avatar_url: null, password: body.password, phone, created_at: now };
+      store.users.push(user);
+      store.currentUser = user;
+      persist();
+      return json({ token: DEMO_TOKEN, user: { id: user.id, username: user.username, nickname: null, avatar_url: null, phone: maskPhone(phone) } }, 201);
+    }
+    if (path === "/api/auth/check-username" && method === "GET") {
+      const username = String(url.searchParams.get("username") || "").trim().toLowerCase();
+      if (!/^[\w\u4e00-\u9fff-]{2,24}$/.test(username)) return json({ available: false, reason: "格式不符" });
+      const exists = store.users.some((u) => u.username === username && u.id !== 999);
+      return json({ available: !exists, reason: exists ? "已存在" : null });
+    }
+    if (path === "/api/auth/check-phone" && method === "GET") {
+      const phone = normalizePhone(url.searchParams.get("phone"));
+      if (!phone) return json({ available: false, reason: "格式不符" });
+      const taken = store.users.some((u) => u.phone === phone);
+      return json({ available: !taken, reason: taken ? "已绑定" : null });
+    }
+    if (path === "/api/auth/reset-password" && method === "POST") {
+      // 与真实后端一致：用户名 + 手机号核验通过后重设密码
+      const username = String(body.username || "").trim().toLowerCase();
+      const phone = normalizePhone(body.phone);
+      if (!username) return json({ error: "请输入注册时的用户名" }, 400);
+      if (!phone) return json({ error: "请输入注册时绑定的手机号" }, 400);
+      if (typeof body.newPassword !== "string" || body.newPassword.length < 8 || !/[A-Za-z]/.test(body.newPassword) || !/\d/.test(body.newPassword)) return json({ error: "新密码至少 8 位，需同时包含字母和数字" }, 400);
+      const user = store.users.find((u) => u.username === username && u.id !== 999);
+      if (!user || user.phone !== phone) return json({ error: "用户名或手机号不匹配，无法重置密码" }, 400);
+      user.password = body.newPassword;
+      persist();
+      return json({ ok: true });
     }
     if (path === "/api/auth/login" && method === "POST") {
-      const username = String(body.username || "").trim();
-      if (username.length < 2) return json({ error: "请输入用户名（演示环境任意账号密码均可）" }, 400);
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
-      // 按用户名区分身份：同名登录回到同一身份，不同用户名各建一个账号——协作功能需要多用户
-      let user = store.users.find((u) => u.username === username && u.id !== 999);
-      if (!user) {
-        const legacy = userById(999);
-        if (legacy && legacy.username === username) {
-          user = legacy;
-        } else {
-          user = { id: store.nextUserId++, username, nickname: null, avatar_url: null, created_at: now };
-          store.users.push(user);
-        }
-      }
+      // 与真实后端一致：账号必须真实存在，密码必须正确；不再「任意用户名自动建号」
+      const username = String(body.username || "").trim().toLowerCase();
+      const password = typeof body.password === "string" ? body.password : "";
+      if (!username || username.length < 2) return json({ error: "请输入用户名" }, 400);
+      const user = store.users.find((u) => u.username === username && u.id !== 999);
+      if (!user || user.password !== password) return json({ error: "用户名或密码错误。演示环境可用体验账号 chen_foodie（密码 demo123456）" }, 401);
       store.currentUser = user;
       persist();
       return json({ token: DEMO_TOKEN, user: { id: user.id, username: user.username, nickname: user.nickname || null, avatar_url: user.avatar_url || null } }, 201);

@@ -1154,7 +1154,7 @@ async function refreshPhotoWall(spotId) {
     const payload = await response.json();
     const photos = Array.isArray(payload.data) ? payload.data : [];
     if (!photos.length) { list.innerHTML = '<span class="field-note">还没有社区照片，来传第一张</span>'; return; }
-    list.innerHTML = photos.map((photo) => `<figure class="wall-item"><img src="${escapeHTML(photo.url)}" alt="社区照片"><figcaption>${escapeHTML(photo.username || "社区成员")}</figcaption>${state.currentUser && photo.user_id === state.currentUser.id ? `<button class="wall-delete" type="button" data-wall-photo-id="${photo.id}" aria-label="删除">×</button>` : ""}</figure>`).join("");
+    list.innerHTML = photos.map((photo) => `<figure class="wall-item"><img src="${escapeHTML(photo.url)}" alt="社区照片"><figcaption>${escapeHTML(photo.nickname || "社区成员")}</figcaption>${state.currentUser && photo.user_id === state.currentUser.id ? `<button class="wall-delete" type="button" data-wall-photo-id="${photo.id}" aria-label="删除">×</button>` : ""}</figure>`).join("");
     list.querySelectorAll(".wall-delete").forEach((button) => button.addEventListener("click", async () => {
       const response = await fetch(`${API_BASE}/photos/${button.dataset.wallPhotoId}`, { method: "DELETE", headers: authHeaders() });
       if (response.ok) { showToast("照片已删除"); await refreshPhotoWall(spotId); } else { showToast("只能删除自己上传的照片"); }
@@ -1447,7 +1447,7 @@ async function renderCollabSection(section, mapId) {
   const members = payload.data || [];
   const isOwner = !!payload.isOwner;
   section.innerHTML = '<p class="private-map-detail-title"><span>协作成员（均可收藏/移除点位、重命名）</span></p>' +
-    (members.length ? members.map((member) => `<div class="private-map-spot"><div class="private-map-spot-info"><strong>${escapeHTML(member.nickname || member.username)}</strong><span>@${escapeHTML(member.username)}</span></div><span class="card-actions">${isOwner ? `<button class="remove-map-spot remove-collab-button" data-user-id="${member.id}" type="button">移除</button>` : ""}</span></div>`).join("") : '<p class="field-note">还没有协作者。添加后，对方能在自己的「我的私人地图」里看到这张地图并一起编辑。</p>') +
+    (members.length ? members.map((member) => `<div class="private-map-spot"><div class="private-map-spot-info"><strong>${escapeHTML(member.nickname || "社区成员")}</strong><span>用户 ID ${member.id}</span></div><span class="card-actions">${isOwner ? `<button class="remove-map-spot remove-collab-button" data-user-id="${member.id}" type="button">移除</button>` : ""}</span></div>`).join("") : '<p class="field-note">还没有协作者。添加后，对方能在自己的「我的私人地图」里看到这张地图并一起编辑。</p>') +
     (isOwner ? '<div class="collab-add"><input id="collabUsernameInput" type="text" placeholder="输入对方的用户名（或昵称）" maxlength="40"><button class="text-button" id="addCollabButton" type="button">添加协作者 +</button></div><div id="collabCandidates" class="collab-candidates"></div>' : "");
   section.querySelectorAll(".remove-collab-button").forEach((button) => button.addEventListener("click", async () => {
     const response2 = await apiFetch(`${API_BASE}/maps/${mapId}/collaborators/${button.dataset.userId}`, { method: "DELETE", headers: authHeaders() });
@@ -1468,18 +1468,18 @@ async function renderCollabSection(section, mapId) {
       showToast(payload2.error || "添加失败");
       return;
     }
-    showToast(payload2.added ? `已添加 ${payload2.user.nickname || payload2.user.username} 为协作者` : "该用户已经是协作者");
+    showToast(payload2.added ? `已添加 ${payload2.user.nickname || "社区成员"} 为协作者` : "该用户已经是协作者");
     input.value = "";
     await renderCollabSection(section, mapId);
   });
 }
 
-// 昵称重名时的候选选择：选中后按 user_id 精确添加
+// 昵称重名时的候选选择：选中后按 user_id 精确添加（候选只含昵称与用户 ID，不暴露登录名）
 function renderCandidatePicker(section, mapId, candidates) {
   const box = section.querySelector("#collabCandidates");
   if (!box) return;
   box.innerHTML = '<p class="field-note">以下用户昵称相同，请选择要添加的人：</p>' +
-    candidates.map((candidate) => `<label class="map-pick-option"><input type="radio" name="collab-candidate" value="${candidate.id}"><span>${escapeHTML(candidate.nickname || candidate.username)}</span><small>@${escapeHTML(candidate.username)}</small></label>`).join("") +
+    candidates.map((candidate) => `<label class="map-pick-option"><input type="radio" name="collab-candidate" value="${candidate.id}"><span>${escapeHTML(candidate.nickname || "社区成员")}</span><small>用户 ID ${candidate.id}</small></label>`).join("") +
     '<button class="text-button" id="confirmCandidateButton" type="button">添加选中的用户 →</button>';
   const first = box.querySelector('input[name="collab-candidate"]');
   if (first) first.checked = true;
@@ -1489,7 +1489,7 @@ function renderCandidatePicker(section, mapId, candidates) {
     const response2 = await apiFetch(`${API_BASE}/maps/${mapId}/collaborators`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ user_id: Number(selected.value) }) });
     const payload2 = await response2.json().catch(() => ({}));
     if (!response2 || !response2.ok) { showToast(payload2.error || "添加失败"); return; }
-    showToast(payload2.added ? `已添加 ${payload2.user.nickname || payload2.user.username} 为协作者` : "该用户已经是协作者");
+    showToast(payload2.added ? `已添加 ${payload2.user.nickname || "社区成员"} 为协作者` : "该用户已经是协作者");
     await renderCollabSection(section, mapId);
   });
 }
@@ -1703,23 +1703,89 @@ document.querySelector("#authSwitchButton").addEventListener("click", () => {
   // 注册已移至独立页面 register.html：Turnstile 只在注册页加载，避免其 CSP 影响主页面地图
   location.href = "register.html";
 });
-document.querySelector("#forgotPasswordButton").addEventListener("click", () => {
-  // 切换到找回密码申请视图：提交后由管理员在后台审批
-  document.querySelector("#authForm").hidden = true;
-  document.querySelector("#authSwitchButton").hidden = true;
-  document.querySelector("#forgotPasswordButton").hidden = true;
-  document.querySelector("#forgotPanel").hidden = false;
-  document.querySelector("#authTitle").textContent = "申请重置密码";
-  document.querySelector("#authMessage").textContent = "";
-});
+// 手机号归一化：与后端一致（去空格/连字符/+86 前缀）
+function normalizePhone(value) {
+  let phone = String(value ?? "").replace(/[\s-]/g, "");
+  if (/^\+?86(?=\d{11}$)/.test(phone)) phone = phone.replace(/^\+?86/, "");
+  return /^1[3-9]\d{9}$/.test(phone) ? phone : null;
+}
 
-document.querySelector("#forgotBackButton").addEventListener("click", () => {
-  document.querySelector("#forgotPanel").hidden = true;
+function showAuthLoginView() {
   document.querySelector("#authForm").hidden = false;
   document.querySelector("#authSwitchButton").hidden = false;
   document.querySelector("#forgotPasswordButton").hidden = false;
+  document.querySelector("#phoneResetPanel").hidden = true;
+  document.querySelector("#forgotPanel").hidden = true;
   document.querySelector("#authTitle").textContent = "登录清远地图";
+  document.querySelector("#authMessage").textContent = "";
+}
+
+document.querySelector("#forgotPasswordButton").addEventListener("click", () => {
+  // 默认走手机号快速找回：核验通过立即改密，无需等管理员审核
+  document.querySelector("#authForm").hidden = true;
+  document.querySelector("#authSwitchButton").hidden = true;
+  document.querySelector("#forgotPasswordButton").hidden = true;
+  document.querySelector("#phoneResetPanel").hidden = false;
+  document.querySelector("#authTitle").textContent = "通过手机号找回密码";
+  document.querySelector("#authMessage").textContent = "";
+  document.querySelector("#phoneResetMessage").textContent = "";
+  document.querySelector("#phoneResetUsername").focus();
 });
+
+document.querySelector("#phoneResetBackButton").addEventListener("click", showAuthLoginView);
+document.querySelector("#toAdminResetButton").addEventListener("click", () => {
+  document.querySelector("#phoneResetPanel").hidden = true;
+  document.querySelector("#forgotPanel").hidden = false;
+  document.querySelector("#authTitle").textContent = "申请重置密码（人工审核）";
+  document.querySelector("#forgotMessage").textContent = "";
+});
+document.querySelector("#toPhoneResetButton").addEventListener("click", () => {
+  document.querySelector("#forgotPanel").hidden = true;
+  document.querySelector("#phoneResetPanel").hidden = false;
+  document.querySelector("#authTitle").textContent = "通过手机号找回密码";
+});
+
+document.querySelector("#phoneResetForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = document.querySelector("#phoneResetMessage");
+  const username = document.querySelector("#phoneResetUsername").value.trim();
+  const phone = normalizePhone(document.querySelector("#phoneResetPhone").value);
+  const newPassword = document.querySelector("#phoneResetPassword").value;
+  if (!username) { message.textContent = "请填写注册时的用户名"; return; }
+  if (!phone) { message.textContent = "手机号格式不正确：请输入 11 位大陆手机号"; return; }
+  if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) { message.textContent = "新密码至少 8 位，需同时包含字母和数字"; return; }
+  const button = document.querySelector("#phoneResetSubmitButton");
+  button.disabled = true;
+  message.textContent = "核验中……";
+  try {
+    const response = await apiFetch(`${API_BASE}/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, phone, newPassword })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "重置失败");
+    // 重置成功：直接用新密码自动登录（把用户名带回登录框，体验更顺）
+    message.textContent = "密码已重置，正在自动登录……";
+    const loginResponse = await apiFetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password: newPassword })
+    });
+    const loginPayload = await loginResponse.json().catch(() => ({}));
+    if (!loginResponse.ok) throw new Error(loginPayload.error || "自动登录失败，请手动登录");
+    localStorage.setItem(AUTH_TOKEN_KEY, loginPayload.token);
+    state.currentUser = loginPayload.user;
+    updateAuthUI();
+    showToast("密码已重置并登录成功");
+    authBackdrop.hidden = true;
+  } catch (error) {
+    message.textContent = error.message;
+  }
+  button.disabled = false;
+});
+
+document.querySelector("#forgotBackButton").addEventListener("click", showAuthLoginView);
 
 document.querySelector("#forgotForm").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -2211,6 +2277,8 @@ profileBackdrop.addEventListener("click", (event) => { if (event.target === prof
 /* ---------------- 我的资料：昵称与头像（实名点评中展示） ---------------- */
 const settingsBackdrop = document.querySelector("#settingsBackdrop");
 let pendingAvatarFile = null;
+// 「移除头像」标志：点保存后才真正提交 avatar_url=null（保存接口支持清空回默认首字头像）
+let pendingRemoveAvatar = false;
 
 function renderSettingsPreview(name, avatarUrl, seed) {
   const holder = document.querySelector("#settingsPreviewAvatar");
@@ -2219,14 +2287,27 @@ function renderSettingsPreview(name, avatarUrl, seed) {
   document.querySelector("#settingsPreviewName").textContent = name || "未设置昵称";
 }
 
+function syncRemoveAvatarButton() {
+  const button = document.querySelector("#removeAvatarButton");
+  const hasAvatar = Boolean(state.currentUser?.avatar_url);
+  button.hidden = !hasAvatar || pendingAvatarFile || pendingRemoveAvatar;
+}
+
 function openSettings() {
   if (!state.currentUser) return;
   document.querySelector("#settingsNickname").value = state.currentUser.nickname || "";
+  // 手机号脱敏显示（138****5678）：完整号码只在填写新号码时使用
+  document.querySelector("#settingsPhone").value = "";
+  document.querySelector("#settingsPhone").placeholder = state.currentUser.phone
+    ? `当前绑定：${state.currentUser.phone}（留空 = 不修改）`
+    : "尚未绑定，绑定后可自助找回密码";
   document.querySelector("#settingsAvatar").value = "";
   pendingAvatarFile = null;
+  pendingRemoveAvatar = false;
   document.querySelector("#settingsAvatarNote").textContent = "选择新图片后会先上传再保存。";
   document.querySelector("#settingsMessage").textContent = "";
   renderSettingsPreview(state.currentUser.nickname || state.currentUser.username, state.currentUser.avatar_url, state.currentUser.id);
+  syncRemoveAvatarButton();
   settingsBackdrop.hidden = false;
 }
 
@@ -2236,7 +2317,19 @@ settingsBackdrop.addEventListener("click", (event) => { if (event.target === set
 document.querySelector("#settingsAvatar").addEventListener("change", () => {
   const file = document.querySelector("#settingsAvatar").files[0];
   pendingAvatarFile = file || null;
+  if (pendingAvatarFile) pendingRemoveAvatar = false;
   document.querySelector("#settingsAvatarNote").textContent = file ? `已选择：${file.name}（${Math.round(file.size / 1024)} KB）` : "选择新图片后会先上传再保存。";
+  syncRemoveAvatarButton();
+});
+
+// 恢复默认头像：无需重新上传，保存时提交 avatar_url=null 即可
+document.querySelector("#removeAvatarButton").addEventListener("click", () => {
+  pendingRemoveAvatar = true;
+  pendingAvatarFile = null;
+  document.querySelector("#settingsAvatar").value = "";
+  document.querySelector("#settingsAvatarNote").textContent = "已选择移除头像，点「保存资料」后恢复默认首字头像。";
+  renderSettingsPreview(document.querySelector("#settingsNickname").value.trim() || state.currentUser.username, "", state.currentUser.id);
+  syncRemoveAvatarButton();
 });
 
 document.querySelector("#settingsForm").addEventListener("submit", async (event) => {
@@ -2244,24 +2337,35 @@ document.querySelector("#settingsForm").addEventListener("submit", async (event)
   if (!state.currentUser) return;
   const message = document.querySelector("#settingsMessage");
   const nickname = document.querySelector("#settingsNickname").value.trim();
-  if (nickname && (nickname.length < 2 || nickname.length > 24)) { message.textContent = "昵称需为 2-24 个字符"; return; }
+  // 按 Unicode code point 计数（emoji 占 1 个字），与后端规则一致
+  const nicknameLength = [...nickname].length;
+  if (nickname && (nicknameLength < 2 || nicknameLength > 24)) { message.textContent = "昵称需为 2-24 个字"; return; }
   const button = document.querySelector("#settingsSubmitButton");
   button.disabled = true;
   message.textContent = "保存中……";
   try {
-    let avatarUrl = state.currentUser.avatar_url || "";
+    let avatarUrl = pendingRemoveAvatar ? "" : (state.currentUser.avatar_url || "");
     if (pendingAvatarFile) {
       if (pendingAvatarFile.size > 2 * 1024 * 1024) throw new Error("头像不能超过 2MB");
-      const upload = await apiFetch(`${API_BASE}/uploads`, { method: "POST", headers: authHeaders({ "Content-Type": pendingAvatarFile.type }), body: pendingAvatarFile });
+      // purpose=avatar：服务端按头像规则复核（≤2MB、最小分辨率 64×64）
+      const upload = await apiFetch(`${API_BASE}/uploads?purpose=avatar`, { method: "POST", headers: authHeaders({ "Content-Type": pendingAvatarFile.type }), body: pendingAvatarFile });
       const uploadPayload = await upload.json().catch(() => ({}));
       if (!upload.ok) throw new Error(uploadPayload.error || "头像上传失败");
       avatarUrl = uploadPayload.url;
     }
     renderSettingsPreview(nickname || state.currentUser.username, avatarUrl, state.currentUser.id);
+    const body = { nickname, avatar_url: avatarUrl };
+    // 手机号留空 = 不修改；填写了才提交改绑
+    const phoneRaw = document.querySelector("#settingsPhone").value.trim();
+    if (phoneRaw) {
+      const phone = normalizePhone(phoneRaw);
+      if (!phone) { message.textContent = "手机号格式不正确：请输入 11 位大陆手机号"; button.disabled = false; return; }
+      body.phone = phone;
+    }
     const response = await apiFetch(`${API_BASE}/auth/profile`, {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ nickname, avatar_url: avatarUrl })
+      body: JSON.stringify(body)
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || "保存失败");

@@ -247,11 +247,16 @@
       <p class="modal-intro">昵称与头像会展示在你发表的实名点评里；匿名点评不显示任何个人信息。</p>
       <div class="settings-preview"><span id="settingsPreviewAvatar" class="profile-avatar"></span><div><strong id="settingsPreviewName">未设置昵称</strong><small class="field-note">实名点评中的展示效果</small></div></div>
       <form id="settingsForm">
-        <label>昵称（2-24 字，留空则使用用户名）<input id="settingsNickname" type="text" maxlength="24" placeholder="例如：北江食客"></label>
+        <label>昵称（2-24 字，留空保存 = 恢复显示用户名，不会报错）<input id="settingsNickname" type="text" maxlength="24" placeholder="例如：北江食客"></label>
+        <p class="field-note">昵称不能与其他用户的用户名重复，也不可包含「管理员 / 官方」等保留字。</p>
         <label>头像（JPG / PNG / WebP，≤2MB）<input type="file" id="settingsAvatar" accept="image/jpeg,image/png,image/webp"></label>
         <p class="field-note" id="settingsAvatarNote">选择新图片后会先上传再保存。</p>
+        <button class="text-button" type="button" id="removeAvatarButton" hidden>移除头像，恢复默认首字头像</button>
+        <label>绑定手机号（11 位，用于忘记密码时自助找回；留空 = 不修改）<input id="settingsPhone" type="tel" inputmode="numeric" maxlength="13" placeholder="例如 13812345678"></label>
+        <p class="field-note" id="settingsPhoneNote">一个手机号只能绑定一个账号。</p>
         <button class="primary-button full-width" type="submit" id="settingsSubmitButton">保存资料</button>
         <p class="form-message" id="settingsMessage" role="status"></p>
+        <p class="field-note">昵称与头像须遵守社区规范，不得冒充他人或官方身份，违规资料将被重置。</p>
       </form>
     </section>
   </div>
@@ -270,9 +275,22 @@
       <form id="authForm"><label>用户名<input name="username" type="text" minlength="2" maxlength="24" required></label><label>密码<input name="password" type="password" id="authPassword" required></label><button class="primary-button full-width" type="submit"><span id="authSubmitText">登录</span> <span>→</span></button></form>
       <button class="auth-switch" id="authSwitchButton" type="button">没有账号？注册一个</button><button class="auth-switch" id="forgotPasswordButton" type="button">忘记密码？</button><p class="form-message" id="authMessage" role="status"></p>
 
+      <section id="phoneResetPanel" hidden>
+        <p class="modal-intro">输入注册时的用户名和手机号，核验通过后立即设置新密码并自动登录。没有绑定手机号的账号，请用下方的人工审核找回。</p>
+        <form id="phoneResetForm">
+          <label>注册用户名<input id="phoneResetUsername" type="text" required maxlength="24"></label>
+          <label>注册时绑定的手机号<input id="phoneResetPhone" type="tel" inputmode="numeric" maxlength="13" required placeholder="例如 13812345678"></label>
+          <label>新密码（至少 8 位，需包含字母和数字）<input id="phoneResetPassword" type="password" required minlength="8" maxlength="128" autocomplete="new-password"></label>
+          <button class="primary-button full-width" type="submit" id="phoneResetSubmitButton">核验并重置密码</button>
+          <p class="form-message" id="phoneResetMessage" role="status"></p>
+          <button class="auth-switch" id="phoneResetBackButton" type="button">← 返回登录</button>
+          <button class="auth-switch" id="toAdminResetButton" type="button">手机号没绑定？走人工审核找回 →</button>
+        </form>
+      </section>
+
       <section id="forgotPanel" hidden>
         <p class="modal-intro">提交后等待管理员审核。审核通过后一次性随机临时密码会推送到你之前登录过的设备，用它登录时系统会要求你立即设置新密码。</p>
-        <form id="forgotForm"><label>你的用户名<input id="forgotUsername" type="text" required maxlength="24"></label><label>补充说明（可选）<input id="forgotNote" type="text" maxlength="200" placeholder="例如：注册时间、常用地点，方便管理员确认身份"></label><button class="primary-button full-width" type="submit" id="forgotSubmitButton">提交申请</button><p class="form-message" id="forgotMessage" role="status"></p><button class="auth-switch" id="forgotBackButton" type="button">← 返回登录</button></form>
+        <form id="forgotForm"><label>你的用户名<input id="forgotUsername" type="text" required maxlength="24"></label><label>补充说明（可选）<input id="forgotNote" type="text" maxlength="200" placeholder="例如：注册时间、常用地点，方便管理员确认身份"></label><button class="primary-button full-width" type="submit" id="forgotSubmitButton">提交申请</button><p class="form-message" id="forgotMessage" role="status"></p><button class="auth-switch" id="forgotBackButton" type="button">← 返回登录</button><button class="auth-switch" id="toPhoneResetButton" type="button">我绑定了手机号，用手机号快速找回 →</button></form>
       </section>
     </section>
   </div>

@@ -41,6 +41,20 @@ const SPOT_SUBMIT_LIMIT_PER_HOUR = 10;
 const AMAP_PROXY_LIMIT_PER_HOUR = 60;
 // 大众点评写入（发表或修改）限流：防刷屏
 const REVIEW_WRITE_LIMIT_PER_HOUR = 20;
+// 个人资料（昵称/头像）修改限流：防脚本无限次改名刷屏、频繁换头像
+const PROFILE_UPDATE_LIMIT_PER_HOUR = 10;
+// 用户名可用性检查限流：接口本身可被用来枚举用户名，必须收紧
+const USERNAME_CHECK_LIMIT_PER_HOUR = 20;
+// 手机号可用性检查限流：同样可枚举，收紧
+const PHONE_CHECK_LIMIT_PER_HOUR = 20;
+// 自助找回密码限流：用户名+手机号核验后可直接重设密码，必须严防手机号暴力枚举
+const PHONE_RESET_LIMIT_PER_HOUR = 5;
+// 头像上传服务端上限（与前端一致）：绕过前端直调 /api/uploads 时同样生效
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+// 头像最小分辨率：防止 1px 追踪图 / 空白占位图被当作头像
+const AVATAR_MIN_DIMENSION = 64;
+// 昵称保留字：禁止冒充管理员/官方身份，匹配时忽略大小写
+const NICKNAME_RESERVED_WORDS = ["admin", "administrator", "moderator", "staff", "root", "sysop", "管理员", "官方", "系统", "客服", "版主", "清远社区地图", "社区地图"];
 // 导航点击埋点限流：按来源 IP 每小时 60 次，防脚本刷热度
 const NAVIGATE_LIMIT_PER_HOUR = 60;
 
@@ -50,6 +64,9 @@ async function dispatch(request, env) {
     if (url.pathname === "/api/spots" && request.method === "POST") return createSpot(request, env);
     if (url.pathname === "/api/auth/register" && request.method === "POST") return register(request, env);
     if (url.pathname === "/api/auth/login" && request.method === "POST") return login(request, env);
+    if (url.pathname === "/api/auth/check-username" && request.method === "GET") return checkUsernameAvailability(request, url, env);
+    if (url.pathname === "/api/auth/check-phone" && request.method === "GET") return checkPhoneAvailability(request, url, env);
+    if (url.pathname === "/api/auth/reset-password" && request.method === "POST") return resetPasswordByPhone(request, env);
     if (url.pathname === "/api/auth/me" && request.method === "GET") return currentUser(request, env);
     if (url.pathname === "/api/auth/logout" && request.method === "POST") return logout(request, env);
     if (url.pathname === "/api/auth/change-password" && request.method === "POST") return changePassword(request, env);
@@ -242,12 +259,25 @@ async function uploadImage(request, env) {
   const user = await authenticatedUser(request, env);
   if (!user) return json({ error: "请先登录" }, 401, env);
   if (!env.IMAGES) return json({ error: "图片存储尚未配置" }, 503, env);
+  const url = new URL(request.url);
+  const purpose = (url.searchParams.get("purpose") || "").trim().toLowerCase();
+  const isAvatar = purpose === "avatar";
   const contentType = request.headers.get("Content-Type") || "";
   if (!/^image\/(jpeg|png|webp)$/.test(contentType)) return json({ error: "仅支持 JPG、PNG、WebP 图片" }, 400, env);
   const body = await request.arrayBuffer();
-  if (body.byteLength > 20 * 1024 * 1024) return json({ error: "单张图片不能超过 20MB" }, 400, env);
+  // 头像类上传（?purpose=avatar）服务端强制 ≤2MB，与前端限制一致，
+  // 防止绕过前端直调接口把 20MB 大图塞进头像
+  const maxBytes = isAvatar ? AVATAR_MAX_BYTES : 20 * 1024 * 1024;
+  if (body.byteLength > maxBytes) return json({ error: isAvatar ? "头像不能超过 2MB" : "单张图片不能超过 20MB" }, 400, env);
   // 二次校验：文件头必须与声明的类型一致，否则拒绝
   if (sniffImageType(new Uint8Array(body.slice(0, 12))) !== contentType) return json({ error: "文件内容与声明的图片格式不一致，请重新上传" }, 400, env);
+  if (isAvatar) {
+    // 头像最小分辨率校验：拦掉 1px 追踪图与空白占位图
+    const dimensions = sniffImageDimensions(new Uint8Array(body.slice(0, 64)));
+    if (dimensions && (dimensions.width < AVATAR_MIN_DIMENSION || dimensions.height < AVATAR_MIN_DIMENSION)) {
+      return json({ error: `头像分辨率过低，至少需要 ${AVATAR_MIN_DIMENSION}×${AVATAR_MIN_DIMENSION} 像素` }, 400, env);
+    }
+  }
   if (!await reserveProjectUsage(env, body.byteLength, 1, 0)) return json({ error: "项目图片存储或写入总额度已达到上限" }, 429, env);
   const extension = contentType.split("/")[1].replace("jpeg", "jpg");
   const key = `${user.id}/${crypto.randomUUID()}.${extension}`;
@@ -306,6 +336,91 @@ function sanitizeAIOutput(value) {
     .slice(0, AI_RECOMMENDATION_MAX_LENGTH);
 }
 
+// 昵称净化：剔除控制字符与零宽字符（U+200B-200F、U+202A-202E、U+2060、U+FEFF），
+// 折叠空白。零宽字符拼出来的"昵称"肉眼为空，会被某些端当成空名渲染
+function sanitizeNickname(value) {
+  return String(value ?? "")
+    .replace(/[\u0000-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// 昵称业务校验：长度按 Unicode code point 计数（emoji 占 1 个字，与"2-24 字"文案一致），
+// 去除不可见字符后必须仍有 2 个可见字符；命中保留字视为冒充管理员/官方
+function validateNickname(raw) {
+  const nickname = sanitizeNickname(raw);
+  const codePoints = [...nickname].length;
+  if (!nickname) return { ok: true, nickname: null };
+  if (codePoints < 2 || codePoints > 24) return { ok: false, error: "昵称需为 2-24 个字（按实际字符计数，不含空格修饰）" };
+  const visible = [...nickname.replace(/\s|·|・|・/g, "")].length;
+  if (visible < 2) return { ok: false, error: "昵称可见字符不足，请填写真实可读的昵称" };
+  const lowered = nickname.toLowerCase();
+  if (NICKNAME_RESERVED_WORDS.some((word) => lowered.includes(word.toLowerCase()))) {
+    return { ok: false, error: "该昵称包含保留字（管理员/官方等），请换一个" };
+  }
+  if (/[<>]/.test(nickname)) return { ok: false, error: "昵称不能包含 < 或 >" };
+  return { ok: true, nickname };
+}
+
+// 昵称与他人用户名冲突检查：展示逻辑是「昵称 || 用户名」，昵称若与别人用户名相同，
+// 观众无法区分，存在冒充空间。命中即拒绝
+async function nicknameConflictsWithUsername(env, nickname, selfUserId) {
+  try {
+    const row = await env.DB.prepare("SELECT id FROM users WHERE lower(username) = lower(?) AND id != ? LIMIT 1").bind(nickname, selfUserId).first();
+    return !!row;
+  } catch { return false; }
+}
+
+// 昵称占用检查（同昵称只在必要时才唯一，见 migration-profile-hardening.sql 说明）
+async function nicknameTakenByOther(env, nickname, selfUserId) {
+  try {
+    const row = await env.DB.prepare("SELECT id FROM users WHERE nickname = ? AND id != ? LIMIT 1").bind(nickname, selfUserId).first();
+    return !!row;
+  } catch { return false; }
+}
+
+// 图片尺寸嗅探：从文件头解析 JPEG / PNG / WebP 的像素宽高。
+// 头像用：低于最小分辨率的图（如 1px 追踪像素）直接拒绝
+function sniffImageDimensions(bytes) {
+  try {
+    // PNG：IHDR 块固定在偏移 16，宽高各 4 字节大端
+    if (bytes.length >= 24 && bytes[0] === 0x89 && bytes[1] === 0x50) {
+      return { width: (bytes[16] << 24 | bytes[17] << 16 | bytes[18] << 8 | bytes[19]) >>> 0, height: (bytes[20] << 24 | bytes[21] << 16 | bytes[22] << 8 | bytes[23]) >>> 0 };
+    }
+    // JPEG：扫描 SOF0/SOF1/SOF2 等帧标记
+    if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+      let offset = 2;
+      while (offset + 9 < bytes.length) {
+        if (bytes[offset] !== 0xff) { offset += 1; continue; }
+        const marker = bytes[offset + 1];
+        if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { offset += 2; continue; }
+        const length = (bytes[offset + 2] << 8) | bytes[offset + 3];
+        if ((marker >= 0xc0 && marker <= 0xcf) && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+          return { height: (bytes[offset + 5] << 8) | bytes[offset + 6], width: (bytes[offset + 7] << 8) | bytes[offset + 8] };
+        }
+        offset += 2 + length;
+      }
+      return null;
+    }
+    // WebP：RIFF 容器，按具体子块解析
+    if (bytes.length >= 30 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+      && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
+      const fourcc = String.fromCharCode(bytes[12], bytes[13], bytes[14], bytes[15]);
+      if (fourcc === "VP8X" && bytes.length >= 30) {
+        return { width: 1 + ((bytes[24] | bytes[25] << 8 | bytes[26] << 16) >>> 0), height: 1 + ((bytes[27] | bytes[28] << 8 | bytes[29] << 16) >>> 0) };
+      }
+      if (fourcc === "VP8 " && bytes.length >= 30) {
+        return { width: ((bytes[26] | bytes[27] << 8) & 0x3fff) >>> 0, height: ((bytes[28] | bytes[29] << 8) & 0x3fff) >>> 0 };
+      }
+      if (fourcc === "VP8L" && bytes.length >= 25) {
+        const bits = (bytes[21] | bytes[22] << 8 | bytes[23] << 16 | bytes[24] << 24) >>> 0;
+        return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+      }
+    }
+  } catch { /* 解析失败按未知尺寸处理 */ }
+  return null;
+}
+
 // 生成一次性随机临时密码：字母 + 数字混合（去除易混淆字符 0/O/1/l/I）。
 // 固定临时密码（原 12345）属于公开值，攻击者只需诱导管理员批一条重置申请就能接管他人账号
 function generateTempPassword(length = 12) {
@@ -343,13 +458,20 @@ async function consumeRateLimit(env, scope, identifier, limitPerWindow) {
 }
 
 async function register(request, env) {
-  const body = await request.json();
-  if (!body.username || !/^[\w\u4e00-\u9fff-]{2,24}$/.test(body.username)) return json({ error: "用户名需为 2-24 个字符（支持中文、字母、数字、下划线）" }, 400, env);
+  // 与其他接口对齐：非法/非 JSON 请求体返回 400，而不是抛异常变成 500
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") return json({ error: "请求格式错误" }, 400, env);
+  // 用户名统一小写归一：避免 Tom 与 tom 两个近似冒充账号（旧账号不受影响，登录侧做了兼容）
+  const username = String(body.username || "").trim().toLowerCase();
+  if (!username || !/^[\w\u4e00-\u9fff-]{2,24}$/.test(username)) return json({ error: "用户名需为 2-24 个字符（支持中文、字母、数字、下划线）" }, 400, env);
   if (typeof body.password !== "string" || body.password.length < 8 || body.password.length > 128 || !/[A-Za-z]/.test(body.password) || !/\d/.test(body.password)) return json({ error: "密码至少 8 位，需同时包含字母和数字" }, 400, env);
-  // Turnstile 人机验证：注册已移至独立页面 register.html，网页端注册一律强制校验；
-  // 鸿蒙 App 原生注册以 X-Client-Type: app 声明，走下方免验证降级限额。
+  // 真人验证双模：
+  // ① 服务端配置了 TURNSTILE_SECRET（线上现状）→ 强制 Cloudflare Turnstile 组件校验（网页端）；
+  // ② 未配置 → 「点击一下即确认」的轻量校验：客户端提交 humanCheck（确认标记 + 停留毫秒数），服务端基本校验。
+  // 两种方式都保留 IP 注册频控兜底；鸿蒙 App 原生注册以 X-Client-Type: app 声明，走免验证降级限额。
   const isNativeApp = (request.headers.get("X-Client-Type") || "").trim().toLowerCase() === "app";
-  if (env.TURNSTILE_SECRET && !isNativeApp) {
+  let humanVerified = false;
+  if (!isNativeApp && env.TURNSTILE_SECRET) {
     if (!body.cfToken) return json({ error: "缺少人机验证令牌，请刷新页面后重试" }, 400, env);
     try {
       const verifyResponse = await fetchWithTimeout("https://challenges.cloudflare.com/turnstile/v0/siteverify", 8000, {
@@ -359,36 +481,129 @@ async function register(request, env) {
       });
       const verify = await verifyResponse.json().catch(() => ({ success: false }));
       if (!verify.success) return json({ error: "人机验证未通过，请刷新页面重试" }, 400, env);
+      humanVerified = true;
     } catch {
       return json({ error: "人机验证服务异常，请稍后重试" }, 502, env);
     }
+  } else {
+    const humanCheck = body.humanCheck || {};
+    const dwellMs = Number(humanCheck.dwellMs);
+    humanVerified = !isNativeApp
+      && humanCheck.confirmed === true
+      && Number.isFinite(dwellMs)
+      && dwellMs >= 800
+      && dwellMs <= 12 * 60 * 60 * 1000;
+    if (!isNativeApp && !humanVerified) return json({ error: "请先点击勾选「我是真人」完成验证" }, 400, env);
   }
-  // 注册 IP 频控：同 IP 24 小时最多 3 个账号；未通过人机验证的（App 原生注册/脚本直连）每天仅 1 个
+  // 注册 IP 频控：同 IP 24 小时最多 3 个账号；完成真人验证的占正常名额，脚本直连每天仅 1 个
   const regIp = request.headers.get("CF-Connecting-IP") || "unknown";
   const regCutoff = new Date(Date.now() - 86400000).toISOString().slice(0, 19).replace("T", " ");
   const regStat = await env.DB.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN has_token = 0 THEN 1 ELSE 0 END) AS no_token FROM registrations WHERE ip = ? AND created_at > ?").bind(regIp, regCutoff).first().catch(() => null);
   if (regStat) {
     if (Number(regStat.total || 0) >= 3) return json({ error: "该网络今日注册次数已达上限，请明天再试" }, 429, env);
-    if (!body.cfToken && Number(regStat.no_token || 0) >= 1) return json({ error: "该网络今日免验证注册名额已用完，请明天再试" }, 429, env);
+    if (!humanVerified && Number(regStat.no_token || 0) >= 1) return json({ error: "该网络今日免验证注册名额已用完，请明天再试" }, 429, env);
   }
-  const exists = await env.DB.prepare("SELECT id FROM users WHERE username = ?").bind(body.username.trim()).first();
+  const exists = await env.DB.prepare("SELECT id FROM users WHERE username = ?").bind(username).first();
   if (exists) return json({ error: "用户名已存在" }, 409, env);
+  // 手机号：网页端注册必填（用于忘记密码自助找回）；App 老版本未带手机号时允许注册，
+  // 但不绑定手机号（这类账号忘记密码走原有的管理员人工重置通道）
+  const phone = normalizePhone(body.phone);
+  if (phone === null && !isNativeApp) return json({ error: "请填写手机号（11 位大陆手机号，用于忘记密码时找回）" }, 400, env);
+  if (phone !== null) {
+    const phoneTaken = await env.DB.prepare("SELECT id FROM users WHERE phone = ?").bind(phone).first().catch(() => null);
+    if (phoneTaken) return json({ error: "该手机号已绑定其他账号" }, 409, env);
+  }
   const salt = crypto.randomUUID();
   const hash = await passwordHash(body.password, salt);
-  const result = await env.DB.prepare("INSERT INTO users (username, password_salt, password_hash) VALUES (?, ?, ?)").bind(body.username.trim(), salt, hash).run();
-  await env.DB.prepare("INSERT INTO registrations (ip, has_token) VALUES (?, ?)").bind(regIp, body.cfToken ? 1 : 0).run().catch(() => null);
-  return createSession(env, result.meta.last_row_id, body.username.trim());
+  const result = await env.DB.prepare("INSERT INTO users (username, password_salt, password_hash, phone) VALUES (?, ?, ?, ?)").bind(username, salt, hash, phone).run();
+  await env.DB.prepare("INSERT INTO registrations (ip, has_token) VALUES (?, ?)").bind(regIp, humanVerified ? 1 : 0).run().catch(() => null);
+  return createSession(env, result.meta.last_row_id, username);
+}
+
+// GET /api/auth/check-username?username=xxx：注册页即时可用性检查。
+// 该接口天然可枚举用户名，必须按 IP 限流，并只回答「可用/不可用」这种最少量信息
+async function checkUsernameAvailability(request, url, env) {
+  const rate = await consumeRateLimit(env, "check-username", rateIdentity(request, null), USERNAME_CHECK_LIMIT_PER_HOUR);
+  if (!rate.allowed) return json({ error: "检查过于频繁，请稍后再试" }, 429, env);
+  const username = String(url.searchParams.get("username") || "").trim().toLowerCase();
+  if (!/^[\w\u4e00-\u9fff-]{2,24}$/.test(username)) return json({ available: false, reason: "格式不符" }, 200, env);
+  try {
+    const exists = await env.DB.prepare("SELECT id FROM users WHERE username = ?").bind(username).first();
+    return json({ available: !exists, reason: exists ? "已存在" : null }, 200, env);
+  } catch {
+    return json({ available: true, reason: null }, 200, env);
+  }
+}
+
+// 手机号归一化：去空格/连字符，去掉 +86 / 86 前缀；不是合法大陆手机号返回 null
+function normalizePhone(value) {
+  let phone = String(value ?? "").replace(/[\s-]/g, "");
+  if (/^\+?86(?=\d{11}$)/.test(phone)) phone = phone.replace(/^\+?86/, "");
+  return /^1[3-9]\d{9}$/.test(phone) ? phone : null;
+}
+
+// GET /api/auth/check-phone?phone=xxx：注册页手机号即时可用性检查（是否已被绑定）
+async function checkPhoneAvailability(request, url, env) {
+  const rate = await consumeRateLimit(env, "check-phone", rateIdentity(request, null), PHONE_CHECK_LIMIT_PER_HOUR);
+  if (!rate.allowed) return json({ error: "检查过于频繁，请稍后再试" }, 429, env);
+  const phone = normalizePhone(url.searchParams.get("phone"));
+  if (!phone) return json({ available: false, reason: "格式不符" }, 200, env);
+  try {
+    const taken = await env.DB.prepare("SELECT id FROM users WHERE phone = ?").bind(phone).first();
+    return json({ available: !taken, reason: taken ? "已绑定" : null }, 200, env);
+  } catch {
+    // 未执行 migration-phone.sql 时按可用处理，注册时会再次校验
+    return json({ available: true, reason: null }, 200, env);
+  }
+}
+
+// POST /api/auth/reset-password：忘记密码自助找回。
+// 凭「用户名 + 注册时绑定的手机号」核验身份，核验通过后直接设置新密码。
+// 安全边界：没有短信验证码，核验材料 = 用户名（公开）+ 手机号（半私密），
+// 因此按 IP 严格限流（每小时 5 次），并在成功后清空该账号的登录失败锁定。
+async function resetPasswordByPhone(request, env) {
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") return json({ error: "请求格式错误" }, 400, env);
+  const rate = await consumeRateLimit(env, "reset-password", rateIdentity(request, null), PHONE_RESET_LIMIT_PER_HOUR);
+  if (!rate.allowed) return json({ error: "尝试过于频繁，请 1 小时后再试" }, 429, env);
+  const username = String(body.username || "").trim().toLowerCase();
+  if (!username) return json({ error: "请输入注册时的用户名" }, 400, env);
+  const phone = normalizePhone(body.phone);
+  if (!phone) return json({ error: "请输入注册时绑定的手机号" }, 400, env);
+  if (typeof body.newPassword !== "string" || body.newPassword.length < 8 || body.newPassword.length > 128 || !/[A-Za-z]/.test(body.newPassword) || !/\d/.test(body.newPassword)) {
+    return json({ error: "新密码至少 8 位，需同时包含字母和数字" }, 400, env);
+  }
+  let user = null;
+  try {
+    user = await env.DB.prepare("SELECT id, username, password_salt, phone, must_change_password FROM users WHERE username = ? OR lower(username) = ?").bind(username, username).first();
+  } catch {
+    return json({ error: "找回功能需要先执行 migration-phone.sql 迁移" }, 503, env);
+  }
+  // 用户不存在或手机号不匹配：返回同一句提示，避免泄露「该用户名是否存在」
+  if (!user || !user.phone || user.phone !== phone) {
+    return json({ error: "用户名或手机号不匹配，无法重置密码" }, 400, env);
+  }
+  const salt = crypto.randomUUID();
+  const hash = await passwordHash(body.newPassword, salt);
+  await env.DB.prepare("UPDATE users SET password_salt = ?, password_hash = ?, must_change_password = 0 WHERE id = ?").bind(salt, hash, user.id).run();
+  await env.DB.prepare("DELETE FROM login_attempts WHERE username = ?").bind(user.username).run().catch(() => null);
+  // 重置成功后作废该账号所有旧会话，防止他人用旧登录态继续操作
+  await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(user.id).run().catch(() => null);
+  return json({ ok: true }, 200, env);
 }
 
 async function login(request, env) {
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") return json({ error: "请求格式错误" }, 400, env);
   const username = String(body.username || "").trim();
+  // 注册侧用户名已小写归一，登录时优先小写匹配；历史大写账号按原名兜底，平滑过渡
+  const normalized = username.toLowerCase();
   // 登录限流：同一用户名 15 分钟内连续失败 5 次临时锁定，防暴力破解
-  const attempt = await env.DB.prepare("SELECT failed_count, locked_until FROM login_attempts WHERE username = ?").bind(username).first().catch(() => null);
+  const attempt = await env.DB.prepare("SELECT failed_count, locked_until FROM login_attempts WHERE username = ?").bind(normalized).first().catch(() => null);
   if (attempt && attempt.locked_until && String(attempt.locked_until) > new Date().toISOString().slice(0, 19).replace("T", " ")) {
     return json({ error: "失败次数过多，该账号已临时锁定，请 15 分钟后再试" }, 429, env);
   }
-  const user = await env.DB.prepare("SELECT id, username, password_salt, password_hash, must_change_password FROM users WHERE username = ?").bind(username).first();
+  const user = await env.DB.prepare("SELECT id, username, password_salt, password_hash, must_change_password FROM users WHERE username = ? OR lower(username) = ?").bind(normalized, normalized).first();
   // 无论用户是否存在都执行一次哈希，让两种失败的响应时间一致（防时序探测用户名）
   const candidate = await passwordHash(body.password || "", user ? user.password_salt : "timing");
   const ok = user !== null && user.password_hash === candidate;
@@ -397,12 +612,12 @@ async function login(request, env) {
       // 只对真实存在的账号计数，避免攻击者灌表探测用户名
       const failed = Number(attempt?.failed_count || 0) + 1;
       const lockSql = failed >= 5 ? ", locked_until = datetime('now', '+15 minutes')" : "";
-      await env.DB.prepare(`INSERT INTO login_attempts (username, failed_count, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(username) DO UPDATE SET failed_count = ?, updated_at = CURRENT_TIMESTAMP${lockSql}`).bind(username, failed, failed).run().catch(() => null);
+      await env.DB.prepare(`INSERT INTO login_attempts (username, failed_count, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(username) DO UPDATE SET failed_count = ?, updated_at = CURRENT_TIMESTAMP${lockSql}`).bind(normalized, failed, failed).run().catch(() => null);
     }
     return json({ error: "用户名或密码错误" }, 401, env);
   }
   // 成功登录：清空失败计数，并清理该账号已过期的会话
-  await env.DB.prepare("DELETE FROM login_attempts WHERE username = ?").bind(username).run().catch(() => null);
+  await env.DB.prepare("DELETE FROM login_attempts WHERE username = ?").bind(normalized).run().catch(() => null);
   await env.DB.prepare("DELETE FROM sessions WHERE user_id = ? AND expires_at < datetime('now')").bind(user.id).run().catch(() => null);
   return createSession(env, user.id, user.username, user.must_change_password === 1);
 }
@@ -530,7 +745,9 @@ async function handleCorrection(request, env, id) {
 async function currentUser(request, env) {
   const user = await authenticatedUser(request, env);
   if (!user) return json({ user: null }, 200, env);
-  const payload = { user: { id: user.id, username: user.username, nickname: user.nickname || null, avatar_url: user.avatar_url || null } };
+  // 手机号脱敏展示：只露出前 3 位与后 4 位（138****5678），完整号码绝不回传前端
+  const maskedPhone = user.phone ? `${String(user.phone).slice(0, 3)}****${String(user.phone).slice(-4)}` : null;
+  const payload = { user: { id: user.id, username: user.username, nickname: user.nickname || null, avatar_url: user.avatar_url || null, phone: maskedPhone } };
   if (user.must_change_password) payload.mustChangePassword = true;
   return json(payload, 200, env);
 }
@@ -557,7 +774,7 @@ async function authenticatedUser(request, env) {
   // nickname / avatar_url 由 migration-reviews.sql 引入；旧库未迁移时退回原查询，登录态不受影响
   let user;
   try {
-    user = await env.DB.prepare("SELECT users.id, users.username, users.nickname, users.avatar_url, users.must_change_password FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token = ? AND sessions.expires_at > CURRENT_TIMESTAMP").bind(token).first();
+    user = await env.DB.prepare("SELECT users.id, users.username, users.nickname, users.avatar_url, users.phone, users.must_change_password FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token = ? AND sessions.expires_at > CURRENT_TIMESTAMP").bind(token).first();
   } catch {
     user = await env.DB.prepare("SELECT users.id, users.username, users.must_change_password FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token = ? AND sessions.expires_at > CURRENT_TIMESTAMP").bind(token).first();
   }
@@ -666,8 +883,9 @@ async function listCollaborators(request, env, mapId) {
   if (!access.map) return json({ error: "私人地图不存在" }, 404, env);
   if (!access.canEdit) return json({ error: "没有查看这张地图的权限" }, 403, env);
   try {
-    const rows = await env.DB.prepare("SELECT users.id, users.username, users.nickname, users.avatar_url FROM private_map_collaborators JOIN users ON users.id = private_map_collaborators.user_id WHERE private_map_collaborators.map_id = ? ORDER BY private_map_collaborators.created_at ASC").bind(mapId).all();
-    return json({ data: rows.results || [], isOwner: access.isOwner }, 200, env);
+    // 用户名是登录名，不进入成员列表：对外只展示「昵称 + 用户 ID」
+    const rows = await env.DB.prepare("SELECT users.id, users.nickname, users.avatar_url FROM private_map_collaborators JOIN users ON users.id = private_map_collaborators.user_id WHERE private_map_collaborators.map_id = ? ORDER BY private_map_collaborators.created_at ASC").bind(mapId).all();
+    return json({ data: (rows.results || []).map((row) => ({ ...row, nickname: row.nickname || "社区成员" })), isOwner: access.isOwner }, 200, env);
   } catch {
     return json({ error: "协作功能需要先执行 worker/migration-collab.sql 迁移" }, 503, env);
   }
@@ -677,7 +895,7 @@ async function insertCollaborator(env, mapId, access, target) {
   if (target.id === access.user.id) return json({ error: "不需要添加自己" }, 400, env);
   try {
     const result = await env.DB.prepare("INSERT OR IGNORE INTO private_map_collaborators (map_id, user_id) VALUES (?, ?)").bind(mapId, target.id).run();
-    return json({ added: (result.meta?.changes || 0) > 0, user: target }, 201, env);
+    return json({ added: (result.meta?.changes || 0) > 0, user: { id: target.id, nickname: target.nickname || "社区成员", avatar_url: target.avatar_url || null } }, 201, env);
   } catch {
     return json({ error: "协作功能需要先执行 worker/migration-collab.sql 迁移" }, 503, env);
   }
@@ -695,15 +913,15 @@ async function addCollaborator(request, env, mapId) {
     if (!target) return json({ error: "用户不存在" }, 404, env);
     return insertCollaborator(env, mapId, access, target);
   }
-  const username = String(body.username || "").trim();
+  const username = String(body.username || "").trim().toLowerCase();
   if (username.length < 2) return json({ error: "请输入对方的用户名" }, 400, env);
-  let target = await env.DB.prepare("SELECT id, username, nickname, avatar_url FROM users WHERE username = ?").bind(username).first();
+  let target = await env.DB.prepare("SELECT id, username, nickname, avatar_url FROM users WHERE username = ? OR lower(username) = ?").bind(username, username).first();
   if (!target) {
-    // 用户名没命中：尝试按昵称找；昵称可以重复，撞名时返回候选列表让主人二选一
-    const nicknameMatches = await env.DB.prepare("SELECT id, username, nickname, avatar_url FROM users WHERE nickname = ? LIMIT 6").bind(username).all();
+    // 用户名没命中：尝试按昵称找；候选列表只返回「昵称 + 用户 ID」，登录名不外泄
+    const nicknameMatches = await env.DB.prepare("SELECT id, nickname, avatar_url FROM users WHERE nickname = ? LIMIT 6").bind(username).all();
     if (!nicknameMatches.results?.length) return json({ error: "用户不存在，请确认对方已注册" }, 404, env);
     if (nicknameMatches.results.length === 1) target = nicknameMatches.results[0];
-    else return json({ error: `有 ${nicknameMatches.results.length} 位用户昵称相同，请选择具体用户`, candidates: nicknameMatches.results }, 409, env);
+    else return json({ error: `有 ${nicknameMatches.results.length} 位用户昵称相同，请选择具体用户`, candidates: nicknameMatches.results.map((row) => ({ id: row.id, nickname: row.nickname || "社区成员", avatar_url: row.avatar_url || null })) }, 409, env);
   }
   return insertCollaborator(env, mapId, access, target);
 }
@@ -947,7 +1165,8 @@ async function updateOwnSpot(request, env, id) {
 /* --------------------------- 照片墙（社区补充照片） --------------------------- */
 
 async function listSpotPhotos(request, env, spotId) {
-  const rows = await env.DB.prepare("SELECT spot_photos.id, spot_photos.url, spot_photos.user_id, spot_photos.created_at, users.username FROM spot_photos LEFT JOIN users ON users.id = spot_photos.user_id WHERE spot_photos.spot_id = ? ORDER BY spot_photos.created_at DESC").bind(spotId).all().catch(() => ({ results: [] }));
+  // 照片墙对外只展示昵称（登录名 username 不进入公开接口）
+  const rows = await env.DB.prepare("SELECT spot_photos.id, spot_photos.url, spot_photos.user_id, spot_photos.created_at, users.nickname FROM spot_photos LEFT JOIN users ON users.id = spot_photos.user_id WHERE spot_photos.spot_id = ? ORDER BY spot_photos.created_at DESC").bind(spotId).all().catch(() => ({ results: [] }));
   return json({ data: rows.results || [] }, 200, env);
 }
 
@@ -977,7 +1196,8 @@ async function deleteSpotPhoto(request, env, id) {
 }
 
 // 评论对外字段：匿名评论绝不带出 user_id / 昵称 / 头像，任何接口都无法据此反查作者账号；
-// mine 只对评论作者本人（携带其登录态的请求）返回 true，用于标记"我的点评"
+// mine 只对评论作者本人（携带其登录态的请求）返回 true，用于标记"我的点评"。
+// 用户名 = 登录名，不进入任何公开接口：对外统一只展示「昵称 + 用户 ID」
 function reviewPublicFields(row, viewerId) {
   const mine = viewerId != null && row.user_id === viewerId;
   if (row.anonymous) {
@@ -989,7 +1209,7 @@ function reviewPublicFields(row, viewerId) {
     content: row.content,
     anonymous: false,
     created_at: row.created_at,
-    user: { id: row.user_id, nickname: row.nickname || row.username, avatar_url: row.avatar_url || null },
+    user: { id: row.user_id, nickname: row.nickname || "社区成员", avatar_url: row.avatar_url || null },
     mine
   };
 }
@@ -1044,6 +1264,7 @@ async function deleteReview(request, env, id) {
 // GET /api/users/:id/profile：用户公开主页。
 // 只聚合非匿名内容——匿名点评不属于任何可检索的用户维度，这里永远查不到
 async function publicProfile(request, env, userId) {
+  // 用户名是登录名，不进入公开接口；对外只有「昵称 + 用户 ID」
   const user = await env.DB.prepare("SELECT id, username, nickname, avatar_url, created_at FROM users WHERE id = ?").bind(userId).first().catch(() => null);
   if (!user) return json({ error: "用户不存在" }, 404, env);
   const spotCount = await env.DB.prepare("SELECT COUNT(*) AS total FROM spots WHERE user_id = ? AND status = 'approved'").bind(userId).first().catch(() => ({ total: 0 }));
@@ -1052,33 +1273,69 @@ async function publicProfile(request, env, userId) {
     "SELECT reviews.id, reviews.spot_id, reviews.rating, reviews.content, reviews.created_at, spots.name AS spot_name FROM reviews JOIN spots ON spots.id = reviews.spot_id WHERE reviews.user_id = ? AND reviews.anonymous = 0 AND spots.status = 'approved' ORDER BY reviews.created_at DESC LIMIT 10"
   ).bind(userId).all().catch(() => ({ results: [] }));
   return json({
-    user: { id: user.id, nickname: user.nickname || user.username, avatar_url: user.avatar_url || null, created_at: user.created_at },
+    // 注册时间只精确到日期：前端只显示日期，无需暴露到秒的时间戳
+    user: { id: user.id, nickname: user.nickname || "社区成员", avatar_url: user.avatar_url || null, created_at: String(user.created_at || "").slice(0, 10) },
     stats: { public_reviews: Number(reviewCount.total || 0), spots: Number(spotCount.total || 0) },
     reviews: reviewRows.results || []
   }, 200, env);
 }
 
-// POST /api/auth/profile：设置昵称与头像（头像先经 /api/uploads 上传，取回 /api/images/ 地址）
+// POST /api/auth/profile：设置昵称与头像（头像先经 /api/uploads?purpose=avatar 上传，取回 /api/images/ 地址）
+// 与点位/点评/AI 一致，本接口同样限流：防脚本无限次改名刷屏、频繁换头像
 async function updateProfile(request, env) {
   const user = await authenticatedUser(request, env);
   if (!user) return json({ error: "请先登录" }, 401, env);
+  const rate = await consumeRateLimit(env, "profile-update", rateIdentity(request, user), PROFILE_UPDATE_LIMIT_PER_HOUR);
+  if (!rate.allowed) return json({ error: `资料修改过于频繁，每小时最多 ${PROFILE_UPDATE_LIMIT_PER_HOUR} 次，请稍后再试` }, 429, env);
   const body = await request.json().catch(() => ({}));
   const updates = {};
   if (body.nickname !== undefined) {
-    const nickname = String(body.nickname || "").trim();
-    if (nickname && (nickname.length < 2 || nickname.length > 24)) return json({ error: "昵称需为 2-24 个字符" }, 400, env);
-    updates.nickname = nickname || null;
+    const check = validateNickname(body.nickname);
+    if (!check.ok) return json({ error: check.error }, 400, env);
+    const nickname = check.nickname;
+    if (nickname) {
+      // 冒充防护：昵称与其他用户的登录用户名相同即拒绝（展示层是「昵称 || 昵称」，观众无法区分）
+      if (await nicknameConflictsWithUsername(env, nickname, user.id)) {
+        return json({ error: "该昵称与其他用户的用户名相同，容易被冒充，请换一个" }, 409, env);
+      }
+      // 昵称占用检查：重复昵称会污染协作者搜索（撞名 409 多候选），同昵称只在必要时才唯一
+      if (await nicknameTakenByOther(env, nickname, user.id)) {
+        return json({ error: "该昵称已被占用，请换一个" }, 409, env);
+      }
+    }
+    if ((nickname || null) !== (user.nickname || null)) {
+      // 昵称修改留痕：出现冒充/违规改名时可追溯（旧值/新值/时间），管理员可查 profile_name_history
+      await env.DB.prepare("INSERT INTO profile_name_history (user_id, field, old_value, new_value) VALUES (?, 'nickname', ?, ?)")
+        .bind(user.id, user.nickname || null, nickname).run().catch(() => null);
+    }
+    updates.nickname = nickname;
   }
   if (body.avatar_url !== undefined) {
     const url = String(body.avatar_url || "").trim();
-    if (url && !/^\/api\/images\/|^https?:\/\//.test(url)) return json({ error: "头像地址无效" }, 400, env);
+    // 头像只允许站内上传地址：外链可能是追踪像素、超大图、钓鱼图或失效链接
+    if (url && !/^\/api\/images\//.test(url)) return json({ error: "头像地址无效，请使用站内上传的图片" }, 400, env);
     updates.avatar_url = url || null;
+  }
+  if (body.phone !== undefined) {
+    const phone = normalizePhone(body.phone);
+    if (phone === null) return json({ error: "手机号格式不正确：请输入 11 位大陆手机号" }, 400, env);
+    if (phone !== user.phone) {
+      const taken = await env.DB.prepare("SELECT id FROM users WHERE phone = ? AND id != ?").bind(phone, user.id).first().catch(() => null);
+      if (taken) return json({ error: "该手机号已绑定其他账号" }, 409, env);
+    }
+    updates.phone = phone;
   }
   const keys = Object.keys(updates);
   if (!keys.length) return json({ error: "没有需要更新的内容" }, 400, env);
-  await env.DB.prepare(`UPDATE users SET ${keys.map((key) => `${key} = ?`).join(", ")} WHERE id = ?`).bind(...keys.map((key) => updates[key]), user.id).run();
-  const fresh = await env.DB.prepare("SELECT id, username, nickname, avatar_url FROM users WHERE id = ?").bind(user.id).first();
-  return json({ user: { id: fresh.id, username: fresh.username, nickname: fresh.nickname || null, avatar_url: fresh.avatar_url || null } }, 200, env);
+  try {
+    await env.DB.prepare(`UPDATE users SET ${keys.map((key) => `${key} = ?`).join(", ")} WHERE id = ?`).bind(...keys.map((key) => updates[key]), user.id).run();
+  } catch {
+    return json({ error: "保存失败：请先执行 migration-phone.sql 迁移（users 表缺少 phone 列）" }, 503, env);
+  }
+  const fresh = await env.DB.prepare("SELECT id, username, nickname, avatar_url, phone FROM users WHERE id = ?").bind(user.id).first();
+  // 手机号脱敏返回：只露出前 3 位与后 4 位
+  const maskedPhone = fresh.phone ? `${fresh.phone.slice(0, 3)}****${fresh.phone.slice(-4)}` : null;
+  return json({ user: { id: fresh.id, username: fresh.username, nickname: fresh.nickname || null, avatar_url: fresh.avatar_url || null, phone: maskedPhone } }, 200, env);
 }
 
 async function fetchWithTimeout(url, timeoutMs, options) {

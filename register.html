@@ -14,8 +14,23 @@
     .register-intro { margin: 0 0 20px; color: #71807A; font-size: 13px; line-height: 1.7; }
     .register-card label { display: block; font-size: 12px; color: #71807A; margin: 14px 0 6px; }
     .register-card input { width: 100%; }
+    .register-card input.invalid { border-color: #B33A3A; background: #FDF6F5; }
+    .field-row { display: flex; align-items: center; gap: 8px; }
+    .field-row input { flex: 1; min-width: 0; }
+    .toggle-password { flex: none; border: 1px solid #DCE1D9; background: #FFF; border-radius: 8px; padding: 7px 10px; cursor: pointer; font-size: 14px; line-height: 1; }
+    .field-hint { font-size: 12px; color: #9AA69E; margin: 4px 0 0; line-height: 1.6; }
+    .field-hint.error { color: #B33A3A; font-weight: 600; }
+    .field-hint.ok { color: #3E7A4E; }
+    .strength { height: 6px; border-radius: 999px; background: #E4E7DF; margin: 8px 0 0; overflow: hidden; }
+    .strength span { display: block; height: 100%; width: 0; border-radius: 999px; transition: width .25s ease, background-color .25s ease; }
+    /* 轻量真人验证：点击一下即确认，替代加载慢、通过难的远程人机验证组件 */
+    .human-check { margin: 16px 0 0; width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid #DCE1D9; border-radius: 12px; background: #FFF; cursor: pointer; font-size: 13px; color: #4A5A50; text-align: left; }
+    .human-check:hover { border-color: #B9C6B4; }
+    .human-check .hc-box { flex: none; width: 20px; height: 20px; border: 2px solid #B9C6B4; border-radius: 6px; display: grid; place-items: center; color: transparent; font-size: 13px; line-height: 1; transition: all .15s ease; }
+    .human-check.confirmed .hc-box { background: #3E7A4E; border-color: #3E7A4E; color: #FFF; }
+    .human-check.confirmed { color: #3E7A4E; }
     #registerMessage { color: #B33A3A; font-size: 13px; min-height: 20px; margin: 12px 0; }
-    #turnstileBox { margin: 16px 0; min-height: 66px; }
+    .community-pact { margin: 14px 0 0; padding: 10px 12px; background: #F1F3EC; border-radius: 10px; color: #71807A; font-size: 12px; line-height: 1.7; }
     .back-link { display: block; text-align: center; margin-top: 16px; font-size: 13px; }
   </style>
 </head>
@@ -24,54 +39,233 @@
     <p class="eyebrow">ACCOUNT / 注册账号</p>
     <h1>注册清远社区共享地图</h1>
     <p class="register-intro">注册后与网页端、App 端共享同一份数据：提交地点、点赞收藏、我的提交两端一致。</p>
-    <form id="registerForm">
-      <label for="regUsername">用户名（2-24 字符，支持中文）</label>
-      <input id="regUsername" name="username" type="text" minlength="2" maxlength="24" required>
+    <form id="registerForm" novalidate>
+      <label for="regUsername">用户名（2-24 字符，支持中文、字母、数字、下划线、连字符）</label>
+      <input id="regUsername" name="username" type="text" minlength="2" maxlength="24" required autocomplete="username">
+      <p class="field-hint" id="usernameHint">仅限中文、字母、数字、下划线和连字符；用户名不可与他人重复，注册后转为小写保存。</p>
+      <label for="regPhone">手机号（11 位大陆手机号，用于忘记密码时自助找回）</label>
+      <input id="regPhone" name="phone" type="tel" inputmode="numeric" maxlength="13" required autocomplete="tel" placeholder="例如 13812345678">
+      <p class="field-hint" id="phoneHint">一个手机号只能绑定一个账号；请填写真实手机号并牢记，找回密码全靠它。</p>
       <label for="regPassword">密码（至少 8 位，需同时包含字母和数字）</label>
-      <input id="regPassword" name="password" type="password" minlength="8" maxlength="128" required>
-      <div id="turnstileBox"></div>
-      <button class="primary-button full-width" type="submit" id="registerSubmit">注册并登录 <span>→</span></button>
+      <div class="field-row">
+        <input id="regPassword" name="password" type="password" minlength="8" maxlength="128" required autocomplete="new-password">
+        <button type="button" class="toggle-password" data-target="regPassword" aria-label="显示或隐藏密码">👁</button>
+      </div>
+      <div class="strength" aria-hidden="true"><span id="passwordStrengthBar"></span></div>
+      <p class="field-hint" id="passwordStrengthText">尚未输入密码</p>
+      <label for="regPasswordConfirm">确认密码（再输入一次）</label>
+      <div class="field-row">
+        <input id="regPasswordConfirm" name="password_confirm" type="password" minlength="8" maxlength="128" required autocomplete="new-password">
+        <button type="button" class="toggle-password" data-target="regPasswordConfirm" aria-label="显示或隐藏密码">👁</button>
+      </div>
+      <p class="field-hint" id="confirmHint"></p>
+      <div id="turnstileBox" style="margin: 16px 0 0; min-height: 66px;"></div>
+      <button type="button" class="human-check" id="humanCheckButton" aria-pressed="false">
+        <span class="hc-box" aria-hidden="true">✓</span>
+        <span id="humanCheckText">我是真人 — 点击一下即可确认</span>
+      </button>
+      <button class="primary-button full-width" type="submit" id="registerSubmit" style="margin-top:14px;">注册并登录 <span>→</span></button>
     </form>
     <p id="registerMessage" role="status"></p>
+    <p class="community-pact">提交注册即表示同意社区公约：昵称与头像须遵守社区规范，不得冒充他人或官方身份，违规资料将被重置。</p>
     <a class="text-button back-link" href="index.html">← 已有账号？返回登录</a>
   </main>
+  <!-- demo-data.js 仅在本地静态预览时被用到（/api 不可达时接管注册与用户名检查），线上无副作用 -->
+  <script src="demo-data.js"></script>
   <script>
     const API_BASE = "/api";
     const AUTH_TOKEN_KEY = "qingyuan-auth-token";
+    const USERNAME_PATTERN = /^[\w\u4e00-\u9fff-]{2,24}$/;
+    /* 人机验证双模：服务端配置了 TURNSTILE_SECRET 时用 Cloudflare Turnstile（下方自动渲染）；
+       未配置时用「点击一下即确认」的轻量验证（humanCheck 随请求上报）。两种方式提交时自动二选一 */
     const TURNSTILE_SITE_KEY = "0x4AAAAAAFlIsuJHRZUtIttJ";
-    // Turnstile 仅在本页加载，避免其注入的 CSP 影响主页面地图渲染
-    const turnstileBox = document.querySelector("#turnstileBox");
-    const script = document.createElement("script");
-    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-    script.async = true;
-    script.onload = () => { window.turnstile.render(turnstileBox, { sitekey: TURNSTILE_SITE_KEY, theme: "light", language: "zh-cn" }); };
-    document.head.appendChild(script);
+    let turnstileReady = false;
+    if (TURNSTILE_SITE_KEY) {
+      const turnstileBox = document.querySelector("#turnstileBox");
+      const turnstileScript = document.createElement("script");
+      turnstileScript.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      turnstileScript.async = true;
+      turnstileScript.onload = () => {
+        window.turnstile.render(turnstileBox, { sitekey: TURNSTILE_SITE_KEY, theme: "light", language: "zh-cn", callback: () => { turnstileReady = true; } });
+      };
+      document.head.appendChild(turnstileScript);
+    }
+
+    // 与 app.js 的演示模式回退一致：本地静态预览（localhost）时 /api 不可达，转由演示数据接管
+    const pageLoadTime = Date.now();
+    async function apiRequest(path, options) {
+      const response = await fetch(path, options);
+      const contentType = response.headers.get("Content-Type") || "";
+      const localhost = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+      if (response.status === 404 && !contentType.includes("application/json") && localhost && window.QYDemo) {
+        return window.QYDemo.handle(path, options);
+      }
+      return response;
+    }
+
+    /* 密码可见性切换 */
+    document.querySelectorAll(".toggle-password").forEach((button) => {
+      button.addEventListener("click", () => {
+        const input = document.getElementById(button.dataset.target);
+        if (!input) return;
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        button.textContent = show ? "🙈" : "👁";
+      });
+    });
+
+    /* 轻量真人验证：点击一下即确认（记录页面停留时长，提交时随请求带给服务端） */
+    const humanCheckButton = document.querySelector("#humanCheckButton");
+    const humanCheckText = document.querySelector("#humanCheckText");
+    let humanConfirmed = false;
+    humanCheckButton.addEventListener("click", () => {
+      humanConfirmed = !humanConfirmed;
+      humanCheckButton.classList.toggle("confirmed", humanConfirmed);
+      humanCheckButton.setAttribute("aria-pressed", String(humanConfirmed));
+      humanCheckText.textContent = humanConfirmed ? "✓ 真人验证通过" : "我是真人 — 点击一下即可确认";
+    });
+
+    /* 用户名即时校验：第一个字符输入就提醒（单字/格式问题绝不留到提交后），防抖检查重名 */
+    const usernameInput = document.querySelector("#regUsername");
+    const usernameHint = document.querySelector("#usernameHint");
+    const DEFAULT_HINT = "仅限中文、字母、数字、下划线和连字符；用户名不可与他人重复，注册后转为小写保存。";
+    let usernameCheckTimer = null;
+    let usernameAvailable = null;
+
+    usernameInput.addEventListener("input", () => {
+      clearTimeout(usernameCheckTimer);
+      usernameAvailable = null;
+      const value = usernameInput.value.trim().toLowerCase();
+      usernameInput.classList.remove("invalid", "ok");
+      if (!value) { usernameHint.textContent = DEFAULT_HINT; usernameHint.className = "field-hint"; return; }
+      if (!USERNAME_PATTERN.test(value)) {
+        // 明确指出差在哪：只有 1 个字时直接说明"至少 2 个字"
+        const detail = [...value].length < 2 ? "用户名至少需要 2 个字，请继续输入" : "用户名格式不符：仅限中文、字母、数字、下划线和连字符";
+        usernameHint.textContent = `⚠ ${detail}`;
+        usernameHint.className = "field-hint error";
+        usernameInput.classList.add("invalid");
+        return;
+      }
+      usernameInput.classList.add("ok");
+      usernameHint.textContent = "正在检查用户名是否可用……"; usernameHint.className = "field-hint";
+      usernameCheckTimer = setTimeout(async () => {
+        try {
+          const response = await apiRequest(`${API_BASE}/auth/check-username?username=${encodeURIComponent(value)}`);
+          const payload = await response.json().catch(() => ({}));
+          if (payload.available) { usernameAvailable = true; usernameHint.textContent = "✓ 该用户名可用"; usernameHint.className = "field-hint ok"; }
+          else { usernameAvailable = false; usernameHint.textContent = payload.reason === "已存在" ? "⚠ 该用户名已被注册，换一个试试" : "⚠ 该用户名不可用"; usernameHint.className = "field-hint error"; usernameInput.classList.remove("ok"); usernameInput.classList.add("invalid"); }
+        } catch { usernameAvailable = null; usernameHint.textContent = "暂时无法检查可用性，提交时会再次校验。"; usernameHint.className = "field-hint"; }
+      }, 600);
+    });
+
+    /* 手机号即时校验：格式错误立即提醒，防抖检查是否已被绑定 */
+    const phoneInput = document.querySelector("#regPhone");
+    const phoneHint = document.querySelector("#phoneHint");
+    const PHONE_DEFAULT_HINT = "一个手机号只能绑定一个账号；请填写真实手机号并牢记，找回密码全靠它。";
+    function normalizePhone(value) {
+      let phone = String(value ?? "").replace(/[\s-]/g, "");
+      if (/^\+?86(?=\d{11}$)/.test(phone)) phone = phone.replace(/^\+?86/, "");
+      return /^1[3-9]\d{9}$/.test(phone) ? phone : null;
+    }
+    let phoneCheckTimer = null;
+    let phoneAvailable = null;
+    phoneInput.addEventListener("input", () => {
+      clearTimeout(phoneCheckTimer);
+      phoneAvailable = null;
+      const phone = normalizePhone(phoneInput.value);
+      phoneInput.classList.remove("invalid", "ok");
+      if (!phoneInput.value) { phoneHint.textContent = PHONE_DEFAULT_HINT; phoneHint.className = "field-hint"; return; }
+      if (!phone) {
+        phoneHint.textContent = "⚠ 手机号格式不正确：请输入 11 位大陆手机号（1 开头）";
+        phoneHint.className = "field-hint error";
+        phoneInput.classList.add("invalid");
+        return;
+      }
+      phoneHint.textContent = "正在检查手机号是否已被绑定……"; phoneHint.className = "field-hint";
+      phoneCheckTimer = setTimeout(async () => {
+        try {
+          const response = await apiRequest(`${API_BASE}/auth/check-phone?phone=${encodeURIComponent(phone)}`);
+          const payload = await response.json().catch(() => ({}));
+          if (payload.available) { phoneAvailable = true; phoneHint.textContent = "✓ 该手机号可以绑定"; phoneHint.className = "field-hint ok"; phoneInput.classList.add("ok"); }
+          else { phoneAvailable = false; phoneHint.textContent = payload.reason === "已绑定" ? "⚠ 该手机号已绑定其他账号，请更换或直接登录" : "⚠ 该手机号不可用"; phoneHint.className = "field-hint error"; phoneInput.classList.add("invalid"); }
+        } catch { phoneAvailable = null; phoneHint.textContent = "暂时无法检查绑定情况，提交时会再次校验。"; phoneHint.className = "field-hint"; }
+      }, 600);
+    });
+
+    /* 密码强度提示条：按长度 + 字符类别给三档 */
+    const passwordInput = document.querySelector("#regPassword");
+    const strengthBar = document.querySelector("#passwordStrengthBar");
+    const strengthText = document.querySelector("#passwordStrengthText");
+    function passwordStrength(value) {
+      if (!value) return 0;
+      let score = 0;
+      if (value.length >= 8) score += 1;
+      if (value.length >= 12) score += 1;
+      if (/[A-Za-z]/.test(value) && /\d/.test(value)) score += 1;
+      if (/[^A-Za-z0-9]/.test(value)) score += 1;
+      return Math.min(3, Math.max(1, score - 1));
+    }
+    passwordInput.addEventListener("input", () => {
+      const level = passwordStrength(passwordInput.value);
+      const labels = ["太短了", "强度：一般", "强度：良好", "强度：很强"];
+      const colors = ["#C96A5A", "#D9A441", "#7BA05B", "#3E7A4E"];
+      const widths = ["8%", "45%", "72%", "100%"];
+      strengthBar.style.width = passwordInput.value ? widths[level] : "0";
+      strengthBar.style.backgroundColor = passwordInput.value ? colors[level] : "transparent";
+      strengthText.textContent = passwordInput.value ? labels[level] : "尚未输入密码";
+    });
+
+    /* 确认密码一致性即时提示 */
+    const confirmInput = document.querySelector("#regPasswordConfirm");
+    const confirmHint = document.querySelector("#confirmHint");
+    confirmInput.addEventListener("input", () => {
+      if (!confirmInput.value) { confirmHint.textContent = ""; return; }
+      confirmHint.textContent = confirmInput.value === passwordInput.value ? "✓ 两次输入一致" : "两次输入的密码不一致";
+      confirmHint.className = confirmInput.value === passwordInput.value ? "field-hint ok" : "field-hint error";
+    });
 
     document.querySelector("#registerForm").addEventListener("submit", async (event) => {
       event.preventDefault();
       const message = document.querySelector("#registerMessage");
-      const username = document.querySelector("#regUsername").value.trim();
-      const password = document.querySelector("#regPassword").value;
+      const username = usernameInput.value.trim().toLowerCase();
+      const password = passwordInput.value;
+      if (!USERNAME_PATTERN.test(username)) {
+        message.textContent = [...username].length < 2
+          ? "用户名至少需要 2 个字（最多 24 字）"
+          : "用户名格式不符：仅限中文、字母、数字、下划线、连字符，长度 2-24";
+        usernameInput.classList.add("invalid");
+        usernameInput.focus();
+        return;
+      }
       if (!password || password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
         message.textContent = "密码至少 8 位，需同时包含字母和数字";
         return;
       }
-      const cfToken = window.turnstile ? (turnstile.getResponse() || "") : "";
-      if (!cfToken) { message.textContent = "请先完成人机验证"; return; }
+      if (password !== confirmInput.value) { message.textContent = "两次输入的密码不一致"; return; }
+      const phone = normalizePhone(phoneInput.value);
+      if (!phone) { message.textContent = "请填写 11 位大陆手机号（用于忘记密码时找回账号）"; phoneInput.classList.add("invalid"); phoneInput.focus(); return; }
+      // 人机验证双模：配置了 Turnstile 时要求完成组件验证；否则要求点击式确认
+      const cfToken = TURNSTILE_SITE_KEY && window.turnstile ? (turnstile.getResponse() || "") : "";
+      if (TURNSTILE_SITE_KEY && !cfToken) { message.textContent = "请先完成人机验证"; return; }
+      if (!TURNSTILE_SITE_KEY && !humanConfirmed) { message.textContent = "请先点击「我是真人」完成验证"; humanCheckButton.focus(); return; }
       const submitButton = document.querySelector("#registerSubmit");
       submitButton.disabled = true;
       message.textContent = "注册中……";
       try {
-        const response = await fetch(`${API_BASE}/auth/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password, cfToken }) });
+        const response = await apiRequest(`${API_BASE}/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password, phone, cfToken, humanCheck: { confirmed: true, dwellMs: Date.now() - pageLoadTime } })
+        });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || "注册失败");
+        if (window.turnstile) turnstile.reset();
         // 注册成功：写入与主页面一致的登录态，跳回主页
         localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
         location.href = "index.html";
       } catch (error) {
         message.textContent = error.message;
         submitButton.disabled = false;
-        if (window.turnstile) turnstile.reset();
       }
     });
   </script>

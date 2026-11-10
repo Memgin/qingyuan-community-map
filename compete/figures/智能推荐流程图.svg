@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="650" viewBox="0 0 1100 650">
+  <style>
+    text{font-family:"Microsoft YaHei","Noto Sans CJK SC",sans-serif;fill:#243447}.title{font-size:28px;font-weight:700}.label{font-size:18px;font-weight:700}.small{font-size:15px}
+    .box{fill:#eaf3f7;stroke:#315b78;stroke-width:2;rx:14}.cache{fill:#fff1df;stroke:#b2783c;stroke-width:2}.good{fill:#e9f1e8;stroke:#47734b;stroke-width:2}.arrow{stroke:#5a7184;stroke-width:3;fill:none;marker-end:url(#m)}
+  </style>
+  <defs><marker id="m" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 z" fill="#5a7184"/></marker></defs>
+  <text x="550" y="42" text-anchor="middle" class="title">智能推荐与路线生成流程</text>
+  <rect x="40" y="180" width="210" height="100" class="box"/><text x="145" y="220" text-anchor="middle" class="label">用户输入需求</text><text x="145" y="250" text-anchor="middle" class="small">文字或季节主题</text>
+  <rect x="320" y="180" width="220" height="100" class="cache"/><text x="430" y="220" text-anchor="middle" class="label">查询推荐缓存</text><text x="430" y="250" text-anchor="middle" class="small">需求与视野特征</text>
+  <rect x="610" y="75" width="220" height="100" class="good"/><text x="720" y="115" text-anchor="middle" class="label">命中缓存</text><text x="720" y="145" text-anchor="middle" class="small">直接复用结果</text>
+  <rect x="610" y="285" width="220" height="100" class="box"/><text x="720" y="325" text-anchor="middle" class="label">调用推荐模型</text><text x="720" y="355" text-anchor="middle" class="small">仅使用已上线地点</text>
+  <rect x="900" y="180" width="160" height="100" class="good"/><text x="980" y="220" text-anchor="middle" class="label">地图高亮</text><text x="980" y="250" text-anchor="middle" class="small">文字与点位</text>
+  <rect x="900" y="400" width="160" height="100" class="good"/><text x="980" y="440" text-anchor="middle" class="label">编辑路线</text><text x="980" y="470" text-anchor="middle" class="small">调序、移除、添加</text>
+  <path d="M250 230 H320" class="arrow"/><path d="M540 205 H610 V125" class="arrow"/><text x="565" y="185" class="small">是</text><path d="M540 255 H610 V335" class="arrow"/><text x="565" y="285" class="small">否</text>    <path d="M830 125 H865 V210 H900" class="arrow"/><path d="M830 335 H875 V250 H900" class="arrow"/><path d="M980 280 V400" class="arrow"/>
+</svg>
