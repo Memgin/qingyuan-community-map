@@ -620,16 +620,18 @@ function orderRouteSpots(spots) {
 /* ---------------- 路线贴合道路：高德驾车路径规划逐段取道路点串 ----------------
    相邻点位两两规划（2-10 个点即 1-9 次请求），任一段失败整体降级为直线虚线；
    token 防竞态：连续调序/重画时只保留最后一次规划结果 */
-async function planRoadSegments(spots, token, tokenBox) {
+async function planRoadSegments(spots, token, tokenBox, channel) {
+  // token 为本次规划的快照值，tokenBox[channel] 为该渠道当前值——不一致即被新的规划取代
+  const isStale = () => token !== tokenBox[channel];
   await new Promise((resolve) => AMap.plugin("AMap.Driving", resolve));
-  if (token !== tokenBox.value) return null;
+  if (isStale()) return null;
   const driving = new AMap.Driving({ policy: AMap.DrivingPolicy.LEAST_TIME });
   const segments = [];
   for (let i = 0; i < spots.length - 1; i++) {
     const outcome = await new Promise((resolve) => {
       driving.search(new AMap.LngLat(spots[i].lng, spots[i].lat), new AMap.LngLat(spots[i + 1].lng, spots[i + 1].lat), (status, result) => resolve({ status, result }));
     });
-    if (token !== tokenBox.value) return null;
+    if (isStale()) return null;
     if (outcome.status !== "complete" || !outcome.result?.routes?.length) return null;
     const path = [];
     outcome.result.routes[0].steps.forEach((step) => path.push(...step.path));
@@ -682,7 +684,7 @@ async function drawRoute(spots) {
   nudgeRepaint();
   setTimeout(nudgeRepaint, 400);
   // 道路贴合：规划成功即替换直线，失败保留虚线（不阻塞交互）
-  const segments = await planRoadSegments(ordered, planToken, routePlanTokens);
+  const segments = await planRoadSegments(ordered, planToken, routePlanTokens, "guide");
   if (segments) {
     if (routeOverlay.polyline && guideMap) { gm.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
     routeOverlay.roadLines = addRoadPolylines(gm, segments, "#2F80ED", 80);
@@ -723,7 +725,7 @@ async function drawRouteEditorOverlay() {
     map.add(marker);
     routeEditor.markers.push(marker);
   });
-  const segments = await planRoadSegments(routeEditor.spots, planToken, routePlanTokens);
+  const segments = await planRoadSegments(routeEditor.spots, planToken, routePlanTokens, "editor");
   if (segments) {
     if (routeEditor.polyline) { map.remove(routeEditor.polyline); routeEditor.polyline = null; }
     routeEditor.roadLines = addRoadPolylines(map, segments, "#E67E22", 90);
