@@ -23,12 +23,6 @@
     .field-hint.ok { color: #3E7A4E; }
     .strength { height: 6px; border-radius: 999px; background: #E4E7DF; margin: 8px 0 0; overflow: hidden; }
     .strength span { display: block; height: 100%; width: 0; border-radius: 999px; transition: width .25s ease, background-color .25s ease; }
-    /* 轻量真人验证：点击一下即确认，替代加载慢、通过难的远程人机验证组件 */
-    .human-check { margin: 16px 0 0; width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid #DCE1D9; border-radius: 12px; background: #FFF; cursor: pointer; font-size: 13px; color: #4A5A50; text-align: left; }
-    .human-check:hover { border-color: #B9C6B4; }
-    .human-check .hc-box { flex: none; width: 20px; height: 20px; border: 2px solid #B9C6B4; border-radius: 6px; display: grid; place-items: center; color: transparent; font-size: 13px; line-height: 1; transition: all .15s ease; }
-    .human-check.confirmed .hc-box { background: #3E7A4E; border-color: #3E7A4E; color: #FFF; }
-    .human-check.confirmed { color: #3E7A4E; }
     #registerMessage { color: #B33A3A; font-size: 13px; min-height: 20px; margin: 12px 0; }
     .community-pact { margin: 14px 0 0; padding: 10px 12px; background: #F1F3EC; border-radius: 10px; color: #71807A; font-size: 12px; line-height: 1.7; }
     .back-link { display: block; text-align: center; margin-top: 16px; font-size: 13px; }
@@ -60,10 +54,6 @@
       </div>
       <p class="field-hint" id="confirmHint"></p>
       <div id="turnstileBox" style="margin: 16px 0 0; min-height: 66px;"></div>
-      <button type="button" class="human-check" id="humanCheckButton" aria-pressed="false">
-        <span class="hc-box" aria-hidden="true">✓</span>
-        <span id="humanCheckText">我是真人 — 点击一下即可确认</span>
-      </button>
       <button class="primary-button full-width" type="submit" id="registerSubmit" style="margin-top:14px;">注册并登录 <span>→</span></button>
     </form>
     <p id="registerMessage" role="status"></p>
@@ -92,7 +82,6 @@
     }
 
     // 与 app.js 的演示模式回退一致：本地静态预览（localhost）时 /api 不可达，转由演示数据接管
-    const pageLoadTime = Date.now();
     async function apiRequest(path, options) {
       const response = await fetch(path, options);
       const contentType = response.headers.get("Content-Type") || "";
@@ -112,17 +101,6 @@
         input.type = show ? "text" : "password";
         button.textContent = show ? "🙈" : "👁";
       });
-    });
-
-    /* 轻量真人验证：点击一下即确认（记录页面停留时长，提交时随请求带给服务端） */
-    const humanCheckButton = document.querySelector("#humanCheckButton");
-    const humanCheckText = document.querySelector("#humanCheckText");
-    let humanConfirmed = false;
-    humanCheckButton.addEventListener("click", () => {
-      humanConfirmed = !humanConfirmed;
-      humanCheckButton.classList.toggle("confirmed", humanConfirmed);
-      humanCheckButton.setAttribute("aria-pressed", String(humanConfirmed));
-      humanCheckText.textContent = humanConfirmed ? "✓ 真人验证通过" : "我是真人 — 点击一下即可确认";
     });
 
     /* 用户名即时校验：第一个字符输入就提醒（单字/格式问题绝不留到提交后），防抖检查重名 */
@@ -244,10 +222,9 @@
       if (password !== confirmInput.value) { message.textContent = "两次输入的密码不一致"; return; }
       const phone = normalizePhone(phoneInput.value);
       if (!phone) { message.textContent = "请填写 11 位大陆手机号（用于忘记密码时找回账号）"; phoneInput.classList.add("invalid"); phoneInput.focus(); return; }
-      // 人机验证双模：配置了 Turnstile 时要求完成组件验证；否则要求点击式确认
+      // 人机验证：配置了 Turnstile 时要求完成组件验证
       const cfToken = TURNSTILE_SITE_KEY && window.turnstile ? (turnstile.getResponse() || "") : "";
       if (TURNSTILE_SITE_KEY && !cfToken) { message.textContent = "请先完成人机验证"; return; }
-      if (!TURNSTILE_SITE_KEY && !humanConfirmed) { message.textContent = "请先点击「我是真人」完成验证"; humanCheckButton.focus(); return; }
       const submitButton = document.querySelector("#registerSubmit");
       submitButton.disabled = true;
       message.textContent = "注册中……";
@@ -255,7 +232,7 @@
         const response = await apiRequest(`${API_BASE}/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password, phone, cfToken, humanCheck: { confirmed: true, dwellMs: Date.now() - pageLoadTime } })
+          body: JSON.stringify({ username, password, phone, cfToken })
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || "注册失败");

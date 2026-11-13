@@ -492,14 +492,8 @@ async function register(request, env) {
       return json({ error: "人机验证服务异常，请稍后重试" }, 502, env);
     }
   } else {
-    const humanCheck = body.humanCheck || {};
-    const dwellMs = Number(humanCheck.dwellMs);
-    humanVerified = !isNativeApp
-      && humanCheck.confirmed === true
-      && Number.isFinite(dwellMs)
-      && dwellMs >= 800
-      && dwellMs <= 12 * 60 * 60 * 1000;
-    if (!isNativeApp && !humanVerified) return json({ error: "请先点击勾选「我是真人」完成验证" }, 400, env);
+    // 未配置 Turnstile（本地模拟器等环境）：跳过组件校验，仅靠 IP 注册频控兜底
+    humanVerified = !isNativeApp;
   }
   // 注册 IP 频控：同 IP 24 小时最多 3 个账号；完成真人验证的占正常名额，脚本直连每天仅 1 个
   const regIp = request.headers.get("CF-Connecting-IP") || "unknown";
