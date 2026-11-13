@@ -233,11 +233,11 @@ button { cursor: pointer; }
   .search-box { width: 100%; }
 }
 
-/* ---------------- 私人面板重排（对齐 AI GUIDE）：头部左右布局 + 1100px 内容宽度 ----------------
+/* ---------------- 私人面板重排（对齐 AI GUIDE）：所有内容统一对齐面板内边距 ----------------
    覆盖长行内旧的 .private-panel grid/flex 规则 */
 .private-panel { grid-column: 1 / -1; display: block; padding: 35px clamp(25px, 6vw, 86px); background: #e3ede4; }
 .private-panel h2 { margin: 0; font-family: "Noto Serif SC", serif; font-size: 24px; }
-.private-head { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; max-width: 1100px; margin: 0 auto; }
+.private-head { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
 .private-intro { max-width: 340px; }
 .private-intro .eyebrow { margin-bottom: 8px; }
 .private-intro-text { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
@@ -246,13 +246,13 @@ button { cursor: pointer; }
 .private-panel #mapForm input { flex: 1; min-width: 0; margin: 0; }
 .private-panel #mapForm .primary-button { flex: 0 0 auto; white-space: nowrap; margin: 0; }
 .private-create .map-form-hint { margin: 8px 0 0; max-width: none; }
-.private-ai-row { max-width: 1100px; margin: 18px auto 0; padding-top: 16px; border-top: 1px dashed rgba(25, 43, 42, .15); }
-.private-panel #autoMapForm { display: flex; gap: 8px; align-items: center; margin: 0; }
+.private-ai-row { margin: 18px 0 0; padding-top: 16px; border-top: 1px dashed rgba(25, 43, 42, .15); }
+.private-panel #autoMapForm { display: flex; gap: 8px; align-items: center; margin: 0; max-width: 500px; }
 .private-panel #autoMapForm input { flex: 1; min-width: 0; margin: 0; }
 .private-panel #autoMapForm .primary-button { flex: 0 0 auto; white-space: nowrap; margin: 0; }
-.private-panel .private-map-list { max-width: 1100px; }
-.private-panel .trash-toggle { max-width: 1100px; margin-left: auto; margin-right: auto; display: flex; width: 100%; }
-.private-panel .private-map-detail { max-width: 1100px; margin-left: auto; margin-right: auto; }
+.private-panel .private-map-list { max-width: none; margin: 14px 0 0; }
+.private-panel .trash-toggle { max-width: none; margin: 16px 0 0; display: block; width: auto; }
+.private-panel .private-map-detail { max-width: none; margin: 0; }
 
 /* ---------------- 苹果风组件刷新（叠加覆盖，统一圆角/阴影/交互质感） ----------------
    注意：.marker-pin 旧规则（长行内）已被末尾新体系覆盖，勿在此处重复定义 */
