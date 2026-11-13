@@ -579,8 +579,15 @@ function highlightSpots(ids, silentToast = false) {
 }
 
 /* ---------------- 推荐路线：向导区下方可交互小地图（为路线编辑预留） ---------------- */
-let routeOverlay = { polyline: null, badges: [], roadLines: [], straightLines: [] };
+let routeOverlay = { polyline: null, badges: [], roadLines: [], straightLines: [], mainRoadLines: [], mainStraightLines: [], mainBadges: [] };
 const routePlanTokens = { guide: 0, editor: 0 };
+
+// 清除主地图上的路线覆盖物（打开编辑器时让位给编辑 overlay，清除推荐时彻底移除）
+function clearMainRouteOverlay() {
+  if (routeOverlay.mainRoadLines?.length) { map.remove(routeOverlay.mainRoadLines); routeOverlay.mainRoadLines = []; }
+  if (routeOverlay.mainStraightLines?.length) { map.remove(routeOverlay.mainStraightLines); routeOverlay.mainStraightLines = []; }
+  if (routeOverlay.mainBadges?.length) { map.remove(routeOverlay.mainBadges); routeOverlay.mainBadges = []; }
+}
 
 function clearRoute() {
   if (routeOverlay.polyline && guideMap) { guideMap.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
@@ -588,6 +595,7 @@ function clearRoute() {
   routeOverlay.roadLines = [];
   if (routeOverlay.straightLines?.length && guideMap) guideMap.remove(routeOverlay.straightLines);
   routeOverlay.straightLines = [];
+  clearMainRouteOverlay();
   if (guideMap) routeOverlay.badges.forEach((badge) => guideMap.remove(badge));
   routeOverlay.badges = [];
   const container = document.querySelector("#guideMap");
@@ -685,7 +693,7 @@ async function drawRoute(spots) {
   // 容器此时已是最终尺寸（display 显隐，无高度动画），可直接创建地图
   const gm = ensureGuideMap();
   const planToken = ++routePlanTokens.guide;
-  // 路线画在向导区小地图上（主地图只高亮）：先以直线虚线占位，随后尝试替换为贴合道路的实线
+  // 路线画在向导区小地图上：先以直线虚线占位，随后尝试替换为贴合道路的实线
   routeOverlay.polyline = new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true, zIndex: 80 });
   gm.add(routeOverlay.polyline);
   ordered.forEach((spot, index) => {
@@ -694,6 +702,15 @@ async function drawRoute(spots) {
     routeOverlay.badges.push(badge);
   });
   gm.setFitView(null, false, [40, 40, 40, 40]);
+  // 主地图同步画占位虚线与序号（自动加载路线，无需打开编辑器）
+  clearMainRouteOverlay();
+  routeOverlay.mainStraightLines = [new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 6, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true, zIndex: 85 })];
+  map.add(routeOverlay.mainStraightLines);
+  routeOverlay.mainBadges = ordered.map((spot, index) => {
+    const marker = new AMap.Marker({ position: [spot.lng, spot.lat], content: `<div class="route-badge">${index + 1}</div>`, offset: new AMap.Pixel(-13, -40), zIndex: 115 });
+    map.add(marker);
+    return marker;
+  });
   // 强制首次绘制：高德在尺寸未变化时会跳过重绘，轻推 1px 再还原可立刻触发绘制
   const nudgeRepaint = () => {
     window.dispatchEvent(new Event("resize"));
@@ -706,7 +723,8 @@ async function drawRoute(spots) {
   };
   nudgeRepaint();
   setTimeout(nudgeRepaint, 400);
-  // 道路贴合：逐段规划，成功段替换为道路实线、失败/过近段保留短直线兜底
+  // 道路贴合：逐段规划一次，结果同时用于向导区小地图与主地图（自动加载，无需打开编辑器）
+  // 先以直线占位（即时反馈），成功段替换为道路实线、失败/过近段保留短直线兜底
   const lines = await planRouteLines(ordered, planToken, routePlanTokens, "guide");
   if (lines) {
     if (routeOverlay.polyline && guideMap) { gm.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
@@ -714,6 +732,11 @@ async function drawRoute(spots) {
     routeOverlay.straightLines = lines.straightPaths.map((path) => new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true, zIndex: 80 }));
     if (routeOverlay.straightLines.length) gm.add(routeOverlay.straightLines);
     gm.setFitView(null, false, [40, 40, 40, 40]);
+    // 主地图同步替换
+    clearMainRouteOverlay();
+    routeOverlay.mainRoadLines = addRoadPolylines(map, lines.roadPaths, "#2F80ED", 85);
+    routeOverlay.mainStraightLines = lines.straightPaths.map((path) => new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 6, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true, zIndex: 85 }));
+    if (routeOverlay.mainStraightLines.length) map.add(routeOverlay.mainStraightLines);
   }
 }
 
@@ -798,6 +821,10 @@ function closeRouteEditor() {
   routeEditor.markers = [];
   routeEditorPanel.hidden = true;
   if (detailPanel.hidden) introPanel.hidden = false;
+  // 按当前编辑状态恢复主地图路线，并停留在 AI 向导区（不跳回大地图）
+  drawRoute(routeEditor.spots);
+  const orderText = document.querySelector("#routeOrder");
+  if (orderText && !orderText.hidden) orderText.scrollIntoView({ behavior: "smooth", block: "center" });
   renderMarkers();
 }
 
@@ -811,6 +838,8 @@ document.querySelector("#routeEditorButton").addEventListener("click", () => {
   introPanel.hidden = true;
   detailPanel.hidden = true;
   routeEditorPanel.hidden = false;
+  // 主地图暂时交给编辑 overlay（避免与自动路线双线重叠），退出/保存时恢复
+  clearMainRouteOverlay();
   routeEditorPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   renderRouteEditor();
   drawRouteEditorOverlay();
