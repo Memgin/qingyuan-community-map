@@ -329,6 +329,9 @@ input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 3px rgba(47,109,90
   .detail-photo-form { flex-direction: column; align-items: stretch; gap: 10px; }
   .detail-photo-form input[type="file"] { width: 100%; padding: 10px; font-size: 12px; }
   .detail-photo-form .primary-button { width: 100%; }
+  /* AI 向导表单竖排：修复按钮 width:100% 与输入框在窄屏互相挤压导致的横向溢出 */
+  .guide-copy form { flex-direction: column; align-items: stretch; max-width: none; }
+  .guide-copy form .primary-button { width: 100%; }
 }
 
 /* ---------------- 地图图钉（Google Maps 风格）：圆头 + 正下尖角 + 落地投影 + 高亮脉冲 ----------------

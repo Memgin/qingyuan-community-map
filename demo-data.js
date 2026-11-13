@@ -8,8 +8,9 @@
 
   const STORE_KEY = "qingyuan-demo-store";
   const DEMO_TOKEN = "demo-token";
-  // 演示数据版本号：变更种子数据时同步更新，本地缓存旧版本会自动重置为新种子（保留登录用户）
-  const SEED_VERSION = "2026-11-13-r2";
+  // 2026-11-13：曾临时升级过种子数据（版本号 2026-11-13-r2），现还原为原始演示数据；
+  // 若本地缓存里仍是 r2 版本，首次加载时自动换回原始种子（保留登录用户）
+  const LEGACY_R2_VERSION = "2026-11-13-r2";
 
   /* ---------------- 演示数据种子 ---------------- */
   // 演示账号统一密码（仅存在于本地演示环境，线上不使用）：
@@ -38,13 +39,7 @@
     { id: 5, name: "笔架山森林公园", address: "清远市清城区笔架山林场", category: "scenic", tags: ["登山", "亲子"], description: "市区边的登山步道，山顶可俯瞰全城，适合半天轻徒步。", lat: 23.7305, lng: 113.0710, image_url: null, likes: 52, user_id: 4, created_at: "2026-10-20 09:00:00" },
     { id: 6, name: "飞来湖公园", address: "清远市清城区飞来湖", category: "scenic", tags: ["日落", "散步"], description: "环湖绿道加湿地栈道，傍晚看日落的人最多。", lat: 23.6930, lng: 113.0298, image_url: null, likes: 44, user_id: 2, created_at: "2026-10-22 16:20:00" },
     { id: 7, name: "城市广场", address: "清远市清城区先锋中路", category: "shopping", tags: ["老牌商圈"], description: "老牌商圈，吃饭看电影一站解决，周末人多。", lat: 23.6820, lng: 113.0610, image_url: null, likes: 19, user_id: 3, created_at: "2026-10-25 14:45:00" },
-    { id: 8, name: "太和古洞", address: "清远市清新区太和古洞旅游区", category: "scenic", tags: ["登山", "避暑"], description: "清幽山谷里的古道观，溪水台阶一路向上，夏天避暑首选。", lat: 23.7120, lng: 113.0180, image_url: null, likes: 35, user_id: 4, created_at: "2026-10-28 10:30:00" },
-    { id: 9, name: "清远市人民医院", address: "清远市清城区曙光一路", category: "medical", tags: ["三甲", "急诊"], description: "市区最主要的三甲医院，急诊 24 小时接诊，楼层指引清晰，停车方便。", lat: 23.6902, lng: 113.0451, image_url: null, likes: 41, user_id: 5, created_at: "2026-10-30 09:10:00" },
-    { id: 10, name: "清远市第一中学", address: "清远市清城区西门塘", category: "school", tags: ["百年老校", "书香"], description: "百年老校，红砖教学楼与老榕树是几代清远人的共同记忆。", lat: 23.6848, lng: 113.0402, image_url: null, likes: 23, user_id: 2, created_at: "2026-11-01 15:20:00" },
-    { id: 11, name: "清远站（高铁）", address: "清远市清城区洲心街", category: "transit", tags: ["高铁", "京广线"], description: "京广高铁清远站，广州 40 分钟直达，站前广场换乘公交出租车都方便。", lat: 23.6520, lng: 113.0910, image_url: null, likes: 34, user_id: 3, created_at: "2026-11-03 11:35:00" },
-    { id: 12, name: "黄腾峡漂流", address: "清远市清城区东城街道黄腾峡生态旅游区", category: "scenic", tags: ["漂流", "夏日", "刺激"], description: "华南知名峡谷漂流，落差大水量足，夏天来清远的第一理由。", lat: 23.7610, lng: 113.1020, image_url: null, likes: 61, user_id: 4, created_at: "2026-11-05 10:05:00" },
-    { id: 13, name: "清远万达广场", address: "清远市清城区人民二路", category: "shopping", tags: ["新商圈", "亲子", "电影"], description: "新商圈，餐饮影院亲子配套齐全，晚上灯光街好出片。", lat: 23.6880, lng: 113.0628, image_url: null, likes: 28, user_id: 1, created_at: "2026-11-07 19:40:00" },
-    { id: 14, name: "连江路宵夜猪杂粥", address: "清远市清城区连江路", category: "food", tags: ["宵夜", "猪杂粥", "镬气"], description: "凌晨两点还坐满街坊，猪杂现切现滚粥，镬气小炒同样在线。", lat: 23.6790, lng: 113.0530, image_url: null, likes: 22, user_id: 6, created_at: "2026-11-09 21:50:00" }
+    { id: 8, name: "太和古洞", address: "清远市清新区太和古洞旅游区", category: "scenic", tags: ["登山", "避暑"], description: "清幽山谷里的古道观，溪水台阶一路向上，夏天避暑首选。", lat: 23.7120, lng: 113.0180, image_url: null, likes: 35, user_id: 4, created_at: "2026-10-28 10:30:00" }
   ];
 
   // 点评种子：anonymous 为 true 的条目在任何接口都不带作者信息
@@ -63,24 +58,54 @@
     { id: 22, spot_id: 6, user_id: 2, rating: 4, content: "环湖绿道好行，傍晚日落位好出片，周末人多要早点去。", anonymous: false, created_at: "2026-10-23 17:30:00" },
     { id: 23, spot_id: 6, user_id: 1, rating: 5, content: "带小朋友喂鸽子的好地方，晚上湖边吹风好舒服。", anonymous: true, created_at: "2026-10-27 18:20:00" },
     { id: 24, spot_id: 7, user_id: 3, rating: 4, content: "老商圈配套齐全，吃饭选择多，停车周末比较紧张。", anonymous: false, created_at: "2026-10-26 15:10:00" },
-    { id: 25, spot_id: 8, user_id: 4, rating: 4, content: "溪水清凉，古道幽静，夏天去最舒服，注意防蚊。", anonymous: false, created_at: "2026-10-29 11:00:00" },
-    { id: 26, spot_id: 9, user_id: 2, rating: 5, content: "儿科夜诊效率高，指示牌清楚，全家看病都来这里。", anonymous: false, created_at: "2026-11-02 09:15:00" },
-    { id: 27, spot_id: 9, user_id: 4, rating: 4, content: "急诊很快，就是饭点停车场紧张，建议打车来。", anonymous: true, created_at: "2026-11-06 20:30:00" },
-    { id: 28, spot_id: 10, user_id: 5, rating: 4, content: "母校，老榕树还在，运动场翻新了，傍晚散步很舒服。", anonymous: false, created_at: "2026-11-03 18:00:00" },
-    { id: 29, spot_id: 11, user_id: 3, rating: 4, content: "从广州回来 40 分钟，出站打车进市区十来分钟，很顺。", anonymous: false, created_at: "2026-11-04 14:20:00" },
-    { id: 30, spot_id: 12, user_id: 4, rating: 5, content: "全程尖叫，终点池水仗超解压，记得带换洗衣物和手机防水袋。", anonymous: false, created_at: "2026-11-06 17:45:00" },
-    { id: 31, spot_id: 12, user_id: 6, rating: 4, content: "刺激是真刺激，排队也真长，建议工作日去。", anonymous: true, created_at: "2026-11-08 12:10:00" },
-    { id: 32, spot_id: 13, user_id: 1, rating: 4, content: "周末遛娃首选，四楼餐饮选择多，就是车位紧张。", anonymous: false, created_at: "2026-11-09 13:30:00" },
-    { id: 33, spot_id: 14, user_id: 6, rating: 5, content: "猪杂粥鲜到眉毛掉下来，深夜的清远就靠这一口续命。", anonymous: false, created_at: "2026-11-10 23:40:00" }
+    { id: 25, spot_id: 8, user_id: 4, rating: 4, content: "溪水清凉，古道幽静，夏天去最舒服，注意防蚊。", anonymous: false, created_at: "2026-10-29 11:00:00" }
   ];
 
   /* ---------------- 存取 ---------------- */
-  function defaultStore() {
+  // 种子来源优先级：线上快照（remote-seed.js，由 tools/fetch_remote_data.mjs 只读抓取）> 内置演示数据
+  function dataSourceMarker() {
+    const seed = window.QY_REMOTE_SEED;
+    return seed && Array.isArray(seed.spots) && seed.spots.length ? `remote:${seed.fetched_at}` : "builtin";
+  }
+  function remoteSeeds() {
+    const seed = window.QY_REMOTE_SEED;
+    if (!seed || !Array.isArray(seed.spots) || !seed.spots.length) return null;
+    const remoteUsers = Array.isArray(seed.users) ? seed.users : [];
+    const reviews = Array.isArray(seed.reviews) ? seed.reviews : [];
+    const maxReviewId = reviews.reduce((max, r) => Math.max(max, Number(r.id) || 0), 0);
     return {
-      seed_version: SEED_VERSION,
+      marker: `remote:${seed.fetched_at}`,
+      users: seedUsers.concat(remoteUsers.map((u) => ({ ...u, password: DEMO_PASSWORD, phone: null }))),
+      spots: JSON.parse(JSON.stringify(seed.spots)),
+      reviews: JSON.parse(JSON.stringify(reviews)),
+      photos: seed.photos && typeof seed.photos === "object" ? seed.photos : {},
+      nextReviewId: Math.max(100, maxReviewId + 1)
+    };
+  }
+  function defaultStore() {
+    const remote = remoteSeeds();
+    if (remote) {
+      return {
+        users: remote.users,
+        spots: remote.spots,
+        reviews: remote.reviews,
+        photos: remote.photos,
+        likedBy: {},
+        currentUser: null,
+        nextReviewId: remote.nextReviewId,
+        maps: [],
+        mapSpots: {},
+        nextMapId: 1,
+        collab: {},
+        nextUserId: 1000,
+        data_source: remote.marker
+      };
+    }
+    return {
       users: JSON.parse(JSON.stringify(seedUsers)),
       spots: JSON.parse(JSON.stringify(seedSpots)),
       reviews: JSON.parse(JSON.stringify(seedReviews)),
+      photos: {},
       likedBy: {},
       currentUser: null,
       nextReviewId: 100,
@@ -88,15 +113,27 @@
       mapSpots: {},
       nextMapId: 1,
       collab: {},
-      nextUserId: 1000
+      nextUserId: 1000,
+      data_source: "builtin"
     };
   }
   function loadStore() {
     try {
       const raw = localStorage.getItem(STORE_KEY);
       if (raw) {
-        const store = JSON.parse(raw);
-        if (store && store.seed_version === SEED_VERSION && Array.isArray(store.spots) && Array.isArray(store.reviews)) {
+        let store = JSON.parse(raw);
+        if (store && Array.isArray(store.spots) && Array.isArray(store.reviews)) {
+          // 2026-11-13 临时升级过种子数据（r2 版本）：按用户要求还原为原始演示数据，保留登录用户
+          if (store.seed_version === LEGACY_R2_VERSION) {
+            const fresh = defaultStore();
+            if (store.currentUser && store.currentUser.username) {
+              const kept = fresh.users.find((u) => u.username === store.currentUser.username);
+              if (kept) fresh.currentUser = kept;
+            }
+            store = fresh;
+            persistStore(store);
+            return store;
+          }
           // 旧版本演示数据没有私人地图字段，补默认值避免报错
           if (!Array.isArray(store.maps)) store.maps = [];
           if (!store.mapSpots || typeof store.mapSpots !== "object") store.mapSpots = {};
@@ -105,17 +142,20 @@
           if (!store.nextUserId) store.nextUserId = 1000;
           // 旧版本演示数据没有密码字段，统一补默认密码，保证「登录必须密码正确」对存量数据也生效
           store.users.forEach((user) => { if (typeof user.password !== "string") user.password = DEMO_PASSWORD; });
+          if (!store.photos || typeof store.photos !== "object") store.photos = {};
+          // 数据源变化（线上快照更新 / 无快照回退内置数据）：重建种子，保留登录用户
+          if (store.data_source !== dataSourceMarker()) {
+            const fresh = defaultStore();
+            if (store.currentUser && store.currentUser.username) {
+              const kept = fresh.users.find((u) => u.username === store.currentUser.username);
+              if (kept) fresh.currentUser = kept;
+            }
+            store = fresh;
+            persistStore(store);
+            return store;
+          }
           return store;
         }
-        // 种子数据版本升级：重置为最新演示数据，但保留登录用户（用户名仍存在时）
-        const fresh = defaultStore();
-        if (store && store.currentUser && store.currentUser.username) {
-          const kept = fresh.users.find((u) => u.username === store.currentUser.username);
-          if (kept) fresh.currentUser = kept;
-        }
-        store = fresh;
-        persistStore(store);
-        return store;
       }
     } catch { /* 存储不可用时回到内存种子 */ }
     return defaultStore();
@@ -351,7 +391,10 @@
       return json({ url: dataUrl }, 201);
     }
     const photos = path.match(/^\/api\/spots\/(\d+)\/photos$/);
-    if (photos && method === "GET") return json({ data: [] });
+    if (photos && method === "GET") {
+      const list = (store.photos && store.photos[Number(photos[1])]) || [];
+      return json({ data: list });
+    }
     const like = path.match(/^\/api\/spots\/(\d+)\/like$/);
     if (like && method === "POST") {
       const spotId = Number(like[1]);
