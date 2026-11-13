@@ -816,15 +816,21 @@ function renderMarkers() {
   state.markers = visibleSpots().map((spot) => {
     const marker = new AMap.Marker({ position: [spot.lng, spot.lat], content: markerIcon(spot.category, state.highlightIds.has(String(spot.id))), offset: new AMap.Pixel(-16, -41), title: spot.name });
     marker.setMap(map);
-    marker.on("click", () => {
-      const infoWindow = new AMap.InfoWindow({ content: popupContentHTML(spot), offset: new AMap.Pixel(0, -35), closeWhenClickMap: true });
-      infoWindow.open(map, marker.getPosition());
-    });
+    // 点击图钉：与点击卡片一致——打开左侧详情面板（详情内部会同步弹出信息窗）
+    marker.on("click", () => openSpotDetail(spot.id));
     return marker;
   });
 }
 
 // 拉取点位社区照片并重绘地图弹窗；spot 来自闭包，字段与列表一致
+// 在主地图上弹出指定点位的信息窗（内容含评分 / 导航 / 纠偏；照片展示在左侧详情轮播）
+function showSpotInfoWindow(spot) {
+  const marker = state.markers.find((m) => m.getTitle() === spot.name);
+  if (!marker) return;
+  const infoWindow = new AMap.InfoWindow({ content: popupContentHTML(spot), offset: new AMap.Pixel(0, -35), closeWhenClickMap: true });
+  infoWindow.open(map, marker.getPosition());
+}
+
 function renderList() {
   // 公开模式：state.spots 已是后端返回的当前页数据；我的提交模式仍按本地切片
   const totalCount = state.myOnly ? state.spots.length : state.total;
@@ -1979,9 +1985,11 @@ if (requestedSpot) {
     const spot = state.mapSpots.find((item) => String(item.id) === requestedSpot);
     if (spot) {
       map.setZoomAndCenter(16, [spot.lng, spot.lat], true);
-      const marker = state.markers.find((m) => m.getTitle() === spot.name);
-      if (marker) marker.emit("click");
-      if (openDetail) openSpotDetail(spot.id);
+      if (openDetail) openSpotDetail(spot.id); // 详情内部会同步弹出图钉信息窗
+      else {
+        const marker = state.markers.find((m) => m.getTitle() === spot.name);
+        if (marker) marker.emit("click");
+      }
     } else if (tries > 0) {
       setTimeout(() => waitForSpot(tries - 1), 500);
     }
@@ -2079,9 +2087,9 @@ function openSpotDetail(spotId) {
   if (detailPanel.hidden) highlightBeforeDetail = state.highlightIds;
   state.highlightIds = new Set([String(spot.id)]);
   renderMarkers();
-  // 地图同步弹出该点位的图钉信息窗（照片墙在弹窗里），与左侧详情联动
-  const marker = state.markers.find((m) => m.getTitle() === spot.name);
-  if (marker) marker.emit("click");
+  // 地图同步弹出该点位的图钉信息窗（与左侧详情联动）；
+  // 直接调 showSpotInfoWindow 而非 emit click——避免触发 handler 再次进入本函数造成循环
+  showSpotInfoWindow(spot);
   const item = categories[spot.category] || categories.all;
   const image = document.querySelector("#detailImage");
   if (spot.image_url) { image.src = spot.image_url; image.hidden = false; image.alt = spot.name; } else { image.hidden = true; image.removeAttribute("src"); }
