@@ -788,18 +788,15 @@ function renderFilters() {
   container.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => { state.filter = button.dataset.filter; state.page = 1; refreshList(); }));
 }
 
-// 地图弹窗模板：评分 + 点评入口 + 基础信息 + 位置纠偏（照片墙已移至详情面板轮播）
+// 地图弹窗模板：封面 + 名称 + 分类 + 子标签 + 导航 + 位置纠偏 + 简介
+// （评分与点评已随「点图钉开详情」联动，不再在弹窗里重复展示入口）
 function popupContentHTML(spot) {
   const item = categories[spot.category];
   const image = spot.image_url ? `<img src="${escapeHTML(spot.image_url)}" alt="${escapeHTML(spot.name)}">` : "";
   const address = escapeHTML(spot.address || "地图上的目的地");
   const description = escapeHTML(spot.description || "");
-  // 地图图钉是轻量数据（fields=map），description 可能为空，必须兜底
-  const ratingLine = spot.review_count
-    ? `<div class="popup-rating"><span class="stars">${starsHTML(spot.avg_rating)}</span><small>${Number(spot.avg_rating).toFixed(1)} · ${spot.review_count} 条点评</small><button class="detail-link" data-detail-id="${spot.id}" type="button">查看点评 →</button></div>`
-    : `<div class="popup-rating"><button class="detail-link" data-detail-id="${spot.id}" type="button">评分与点评 →</button></div>`;
   const tagLine = parseSpotTagsClient(spot.tags);
-  return `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small>${tagLine ? `<div class="spot-tags">${tagLine}</div>` : ""}${ratingLine}<a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-nav-id="${spot.id}"><iconify-icon icon="ph:navigation-arrow" inline></iconify-icon> ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button"><iconify-icon icon="ph:map-pin" inline></iconify-icon> 位置纠偏</button><p>${description}</p></div>`;
+  return `<div class="popup-content">${image}<strong>${escapeHTML(spot.name)}</strong><small style="color:${item.color}">${item.label}</small>${tagLine ? `<div class="spot-tags">${tagLine}</div>` : ""}<a class="navigate-link" href="${navigationURL(spot)}" target="_blank" rel="noopener" data-nav-id="${spot.id}"><iconify-icon icon="ph:navigation-arrow" inline></iconify-icon> ${address} · 导航</a><button class="correction-link" data-correct-id="${spot.id}" type="button"><iconify-icon icon="ph:map-pin" inline></iconify-icon> 位置纠偏</button><p>${description}</p></div>`;
 }
 
 // 客户端子标签解析：后端 tags 是 JSON 数组字符串，解析失败返回空；
