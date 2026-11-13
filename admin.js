@@ -212,18 +212,45 @@ async function updateStatus(id, status) {
 }
 
 // 管理员点位列表：可按名称搜索、按状态筛选，违规点位可直接删除
-async function loadAllSpots() {
-  try {
-    const params = new URLSearchParams();
-    if (spotSearchInput.value.trim()) params.set("q", spotSearchInput.value.trim());
-    if (statusFilter.value) params.set("status", statusFilter.value);
-    if (selectedCategory) params.set("category", selectedCategory);
-    const payload = await request(`/admin/spots/all?${params}`);
-    renderAdminCharts(payload.data);
-    const categoryOptions = (spot) => ADMIN_CATEGORIES.filter((item) => item.key).map((item) => `<option value="${item.key}"${spot.category === item.key ? " selected" : ""}>${item.label}</option>`).join("");
-    const spotTagsText = (spot) => { try { const list = typeof spot.tags === "string" ? JSON.parse(spot.tags) : []; return Array.isArray(list) ? list.join("，") : ""; } catch { return ""; } };
-    // 表格化布局：分类下拉与子标签输入均为失焦即保存，状态用彩色胶囊标签
-    allSpotsList.innerHTML = payload.data.length ? `<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>地点</th><th>状态</th><th>分类</th><th>子标签</th><th>点赞</th><th>加入时间</th><th>操作</th></tr></thead><tbody>${payload.data.map((spot) => `<tr>
+let lastAllSpots = [];
+let tagOverviewFilter = "";
+
+// 子标签总览：聚合当前加载点位的全部子标签（去重 + 使用次数排序），点击 chip 过滤下方表格
+function aggregateSpotTags(spots) {
+  const counts = {};
+  for (const spot of spots) {
+    try {
+      const list = typeof spot.tags === "string" ? JSON.parse(spot.tags) : Array.isArray(spot.tags) ? spot.tags : [];
+      for (const tag of Array.isArray(list) ? list : []) if (tag) counts[tag] = (counts[tag] || 0) + 1;
+    } catch { /* 忽略脏数据 */ }
+  }
+  return Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count);
+}
+
+function renderTagOverview(spots) {
+  const box = document.querySelector("#tagOverview");
+  if (!box) return;
+  const tags = aggregateSpotTags(spots);
+  box.innerHTML = tags.length
+    ? tags.map(({ tag, count }) => `<button type="button" class="tag-chip tag-overview-chip${tagOverviewFilter === tag ? " on" : ""}" data-overview-tag="${escapeHTML(tag)}">${escapeHTML(tag)}<small>${count}</small></button>`).join("")
+    : '<span class="field-note">还没有任何子标签——在下方表格的「子标签」列里给点位添加。</span>';
+  box.querySelectorAll("[data-overview-tag]").forEach((button) => button.addEventListener("click", () => {
+    tagOverviewFilter = tagOverviewFilter === button.dataset.overviewTag ? "" : button.dataset.overviewTag;
+    renderTagOverview(lastAllSpots);
+    renderAllSpotsTable();
+  }));
+}
+
+function spotTagsOf(spot) {
+  try { const list = typeof spot.tags === "string" ? JSON.parse(spot.tags) : Array.isArray(spot.tags) ? spot.tags : []; return Array.isArray(list) ? list : []; } catch { return []; }
+}
+
+function renderAllSpotsTable() {
+  const spots = tagOverviewFilter ? lastAllSpots.filter((spot) => spotTagsOf(spot).includes(tagOverviewFilter)) : lastAllSpots;
+  const categoryOptions = (spot) => ADMIN_CATEGORIES.filter((item) => item.key).map((item) => `<option value="${item.key}"${spot.category === item.key ? " selected" : ""}>${item.label}</option>`).join("");
+  const spotTagsText = (spot) => spotTagsOf(spot).join("，");
+  // 表格化布局：分类下拉与子标签输入均为失焦即保存，状态用彩色胶囊标签
+  allSpotsList.innerHTML = spots.length ? `<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>地点</th><th>状态</th><th>分类</th><th>子标签</th><th>点赞</th><th>加入时间</th><th>操作</th></tr></thead><tbody>${spots.map((spot) => `<tr>
       <td><strong>${escapeHTML(spot.name)}</strong><small>${escapeHTML(spot.address || spot.description || "")}</small></td>
       <td><span class="status-pill ${spot.status}">${escapeHTML(STATUS_LABELS[spot.status] || spot.status)}</span></td>
       <td><select data-category-id="${spot.id}">${categoryOptions(spot)}</select></td>
@@ -231,32 +258,48 @@ async function loadAllSpots() {
       <td>${spot.likes}</td>
       <td>${escapeHTML((spot.created_at || "").slice(0, 16))}</td>
       <td><button class="delete" data-delete-id="${spot.id}" type="button">删除</button></td>
-    </tr>`).join("")}</tbody></table></div>` : "<p>没有找到匹配的地点。</p>";
-    allSpotsList.querySelectorAll("button[data-delete-id]").forEach((button) => button.addEventListener("click", () => deleteSpot(button.dataset.deleteId)));
-    // 分类下拉选择即保存：成功后刷新以维持分类筛选的正确性，失败回滚显示
-    allSpotsList.querySelectorAll("select[data-category-id]").forEach((select) => select.addEventListener("change", async () => {
-      try {
-        await request(`/admin/spots/${select.dataset.categoryId}/category`, { method: "POST", body: JSON.stringify({ category: select.value }) });
-        message.textContent = "分类已更新";
-        await loadAllSpots();
-      } catch (error) {
-        message.textContent = error.message;
-        loadAllSpots();
-      }
-    }));
-    // 子标签输入：失焦（change）即保存，超过 5 个自动截断并回写显示
-    allSpotsList.querySelectorAll("input[data-tags-id]").forEach((input) => input.addEventListener("change", async () => {
-      const tags = input.value.split(/[,，、\s]+/).map((tag) => tag.trim()).filter(Boolean).slice(0, 5);
-      if (tags.length < input.value.split(/[,，、\s]+/).filter((tag) => tag.trim()).length) { message.textContent = "子标签最多 5 个，已保留前 5 个"; }
-      try {
-        await request(`/admin/spots/${input.dataset.tagsId}/tags`, { method: "POST", body: JSON.stringify({ tags }) });
-        input.value = tags.join("，");
-        message.textContent = "子标签已更新";
-      } catch (error) {
-        message.textContent = error.message;
-        loadAllSpots();
-      }
-    }));
+    </tr>`).join("")}</tbody></table></div>` : (tagOverviewFilter ? `<p>没有带「${escapeHTML(tagOverviewFilter)}」子标签的地点。</p>` : "<p>没有找到匹配的地点。</p>");
+  allSpotsList.querySelectorAll("button[data-delete-id]").forEach((button) => button.addEventListener("click", () => deleteSpot(button.dataset.deleteId)));
+  // 分类下拉选择即保存：成功后刷新以维持分类筛选的正确性，失败回滚显示
+  allSpotsList.querySelectorAll("select[data-category-id]").forEach((select) => select.addEventListener("change", async () => {
+    try {
+      await request(`/admin/spots/${select.dataset.categoryId}/category`, { method: "POST", body: JSON.stringify({ category: select.value }) });
+      message.textContent = "分类已更新";
+      await loadAllSpots();
+    } catch (error) {
+      message.textContent = error.message;
+      loadAllSpots();
+    }
+  }));
+  // 子标签输入：失焦（change）即保存，超过 5 个自动截断并回写显示；成功后同步总览
+  allSpotsList.querySelectorAll("input[data-tags-id]").forEach((input) => input.addEventListener("change", async () => {
+    const tags = input.value.split(/[,，、\s]+/).map((tag) => tag.trim()).filter(Boolean).slice(0, 5);
+    if (tags.length < input.value.split(/[,，、\s]+/).filter((tag) => tag.trim()).length) { message.textContent = "子标签最多 5 个，已保留前 5 个"; }
+    try {
+      const payload = await request(`/admin/spots/${input.dataset.tagsId}/tags`, { method: "POST", body: JSON.stringify({ tags }) });
+      input.value = (payload.tags || []).join("，");
+      const spot = lastAllSpots.find((item) => String(item.id) === String(input.dataset.tagsId));
+      if (spot) spot.tags = JSON.stringify(payload.tags || []);
+      message.textContent = "子标签已更新";
+      renderTagOverview(lastAllSpots);
+    } catch (error) {
+      message.textContent = error.message;
+      loadAllSpots();
+    }
+  }));
+}
+
+async function loadAllSpots() {
+  try {
+    const params = new URLSearchParams();
+    if (spotSearchInput.value.trim()) params.set("q", spotSearchInput.value.trim());
+    if (statusFilter.value) params.set("status", statusFilter.value);
+    if (selectedCategory) params.set("category", selectedCategory);
+    const payload = await request(`/admin/spots/all?${params}`);
+    lastAllSpots = payload.data;
+    renderAdminCharts(payload.data);
+    renderTagOverview(payload.data);
+    renderAllSpotsTable();
   } catch (error) { message.textContent = error.message; }
 }
 

@@ -267,6 +267,13 @@ input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 3px rgba(47,109,90
 .admin-chart-card { padding: 16px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-m); }
 .admin-chart-card h3 { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
 .chart-empty { margin: 0; padding: 30px 0; text-align: center; color: var(--muted); font-size: 12px; }
+/* 管理后台子标签总览 chips（带使用次数徽标，点击过滤表格） */
+.tag-overview { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag-overview-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #fff; border: 1px solid var(--line); font-size: 12px; color: var(--ink); cursor: pointer; transition: all .15s; }
+.tag-overview-chip small { font-size: 10px; color: var(--muted); background: rgba(47,109,90,.1); border-radius: 999px; padding: 1px 6px; }
+.tag-overview-chip:hover { border-color: var(--green); }
+.tag-overview-chip.on { background: var(--green); border-color: var(--green); color: #fff; }
+.tag-overview-chip.on small { background: rgba(255,255,255,.25); color: #fff; }
 @media (max-width: 820px) { .admin-charts { grid-template-columns: 1fr; } }
 
 /* 骨架屏：列表加载时的占位微光动画 */
