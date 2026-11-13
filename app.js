@@ -806,7 +806,8 @@ document.querySelector("#routeEditorButton").addEventListener("click", () => {
   const ids = draft?.spotIds?.length ? draft.spotIds : [...state.highlightIds];
   const spots = ids.map((id) => findSpotAnywhere(id)).filter(Boolean);
   if (spots.length < 2) { showToast("请先用 AI 推荐生成一条路线"); return; }
-  routeEditor.spots = spots;
+  // 与向导区同款贪心排序：保证编辑器打开时的顺序与向导区小地图完全一致
+  routeEditor.spots = orderRouteSpots(spots);
   introPanel.hidden = true;
   detailPanel.hidden = true;
   routeEditorPanel.hidden = false;
