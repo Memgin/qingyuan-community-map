@@ -281,7 +281,7 @@ input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 3px rgba(47,109,90
 .lumina-viewer model-viewer { display: block; width: 220px; height: 220px; background: rgba(255, 255, 255, .55); border-radius: var(--radius-m); box-shadow: var(--shadow); }
 .guide-copy { flex: 1; min-width: 300px; }
 .guide-copy h2 { margin: 0; }
-.guide-copy p { margin: 10px 0 0; color: rgba(25, 43, 42, .78); font-size: 12px; line-height: 1.8; max-width: 560px; }
+.guide-copy p:not(.eyebrow) { margin: 10px 0 0; color: rgba(25, 43, 42, .78); font-size: 12px; line-height: 1.8; max-width: 560px; }
 .guide-copy form { flex: none; display: flex; gap: 8px; margin: 16px 0 0; max-width: 520px; }
 .guide-copy form input { flex: 1; min-width: 0; margin: 0; border-color: transparent; }
 .guide-copy form .primary-button { flex: 0 0 auto; white-space: nowrap; }
