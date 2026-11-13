@@ -682,7 +682,7 @@ async function drawRoute(spots) {
   nudgeRepaint();
   setTimeout(nudgeRepaint, 400);
   // 道路贴合：规划成功即替换直线，失败保留虚线（不阻塞交互）
-  const segments = await planRoadSegments(ordered, planToken, routePlanTokens.guide);
+  const segments = await planRoadSegments(ordered, planToken, routePlanTokens);
   if (segments) {
     if (routeOverlay.polyline && guideMap) { gm.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
     routeOverlay.roadLines = addRoadPolylines(gm, segments, "#2F80ED", 80);
@@ -723,7 +723,7 @@ async function drawRouteEditorOverlay() {
     map.add(marker);
     routeEditor.markers.push(marker);
   });
-  const segments = await planRoadSegments(routeEditor.spots, planToken, routePlanTokens.editor);
+  const segments = await planRoadSegments(routeEditor.spots, planToken, routePlanTokens);
   if (segments) {
     if (routeEditor.polyline) { map.remove(routeEditor.polyline); routeEditor.polyline = null; }
     routeEditor.roadLines = addRoadPolylines(map, segments, "#E67E22", 90);
