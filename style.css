@@ -276,7 +276,7 @@ input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 3px rgba(47,109,90
 .admin-chart-card h3 { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
 .chart-empty { margin: 0; padding: 30px 0; text-align: center; color: var(--muted); font-size: 12px; }
 /* ---------------- AI GUIDE：Lumina 形象（文创 IP 3D）+ 文案表单 ---------------- */
-.guide-head { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
+.guide-head { display: flex; flex-direction: row-reverse; gap: 28px; align-items: center; flex-wrap: wrap; }
 .lumina-viewer { flex: 0 0 220px; }
 .lumina-viewer model-viewer { display: block; width: 220px; height: 220px; background: rgba(255, 255, 255, .55); border-radius: var(--radius-m); box-shadow: var(--shadow); }
 .guide-copy { flex: 1; min-width: 300px; }
