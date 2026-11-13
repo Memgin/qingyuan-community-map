@@ -102,8 +102,22 @@
     </aside>
 
     <section class="recommend-panel">
-      <div><p class="eyebrow">AI GUIDE / 02</p><h2>不知道去哪？问问清远。</h2><p>输入你的需求，推荐接口会从已审核点位中整理路线。</p></div>
-      <form id="recommendForm"><input id="recommendInput" type="text" placeholder="例如：周末想找一个安静的徒步地方" maxlength="120" required><button class="primary-button" type="submit">开始推荐 <span>→</span></button></form>
+      <div class="guide-head">
+        <div class="lumina-viewer">
+          <model-viewer id="ipModel" src="models/nichuangzai-festive.glb" alt="Lumina——本项目文创 IP 霓窗仔的 3D 形象（可拖拽旋转）" camera-controls auto-rotate auto-rotate-delay="0" rotation-per-second="18deg" shadow-intensity="1" exposure="1.05" interaction-prompt="none"></model-viewer>
+          <div class="ip-switch">
+            <button type="button" class="ip-switch-btn on" data-model="models/nichuangzai-festive.glb">节庆</button>
+            <button type="button" class="ip-switch-btn" data-model="models/nichuangzai-harbor.glb">海港</button>
+            <button type="button" class="ip-switch-btn" data-model="models/nichuangzai-street.glb">街景</button>
+          </div>
+        </div>
+        <div class="guide-copy">
+          <p class="eyebrow">AI GUIDE / 02</p>
+          <h2>不知道去哪？问问 "Lumina"。</h2>
+          <p>Lumina 是本项目文创 IP「霓窗仔」的化身——一只从满洲窗花里走出来的小向导。说出你的需求，它会从已审核点位中整理一条贴路的游览路线。</p>
+          <form id="recommendForm"><input id="recommendInput" type="text" placeholder="例如：周末想找一个安静的徒步地方" maxlength="120" required><button class="primary-button" type="submit">开始推荐 <span>→</span></button></form>
+        </div>
+      </div>
       <div id="seasonChips" class="season-chips"></div>
       <p id="recommendResult" class="recommend-result" role="status"></p>
       <p id="routeOrder" class="recommend-result" hidden></p>
@@ -111,23 +125,6 @@
       <button class="filter-chip active" id="tagFilterChip" type="button" hidden><iconify-icon icon="ph:tag" inline></iconify-icon> <span class="tag-filter-label"></span> <iconify-icon icon="ph:x" inline></iconify-icon></button>
       <button class="text-button" id="clearRouteButton" type="button" hidden><iconify-icon icon="ph:broom" inline></iconify-icon> 清除推荐路线</button>
       <div id="guideMap" class="guide-map"></div>
-    </section>
-    <section class="ip-panel">
-      <div class="ip-head">
-        <div class="ip-intro">
-          <p class="eyebrow">NICHUANGZAI IP / 04</p>
-          <h2>你好，我是霓窗仔。</h2>
-          <p class="ip-text">本项目文创 IP「霓窗仔」源自清远满洲窗的窗花记忆。节庆版张灯结彩、海港版扬帆北江、街景版走街串巷——三个版本陪伴这座城市的日夜与四季。拖一拖，转个圈看看它。</p>
-        </div>
-        <div class="ip-viewer">
-          <model-viewer id="ipModel" src="models/nichuangzai-festive.glb" alt="霓窗仔 IP 3D 模型（可拖拽旋转）" camera-controls auto-rotate auto-rotate-delay="0" rotation-per-second="18deg" shadow-intensity="1" exposure="1.05" interaction-prompt="none"></model-viewer>
-          <div class="ip-switch">
-            <button type="button" class="ip-switch-btn on" data-model="models/nichuangzai-festive.glb">节庆版</button>
-            <button type="button" class="ip-switch-btn" data-model="models/nichuangzai-harbor.glb">海港版</button>
-            <button type="button" class="ip-switch-btn" data-model="models/nichuangzai-street.glb">街景版</button>
-          </div>
-        </div>
-      </div>
     </section>
     <section class="private-panel" id="privatePanel" hidden>
       <div class="private-head">
