@@ -195,7 +195,15 @@ button { cursor: pointer; }
 .admin-table td strong { display: block; font-size: 14px; }
 .admin-table td small { display: block; margin-top: 3px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
 .admin-table select { margin: 0; width: auto; padding: 6px 8px; font-size: 12px; background: #fff; }
-.admin-table input[type="text"] { margin: 0; width: 170px; padding: 6px 8px; font-size: 12px; background: #fff; }
+.admin-table input[type="text"] { margin: 0; width: 200px; padding: 6px 8px; font-size: 12px; background: #fff; transition: border-color .15s, box-shadow .15s; }
+/* 桌面端表格质感：行悬停高亮、正在编辑的行与输入框聚焦提示 */
+.admin-table tbody tr { transition: background .15s; }
+.admin-table tbody tr:hover { background: rgba(47, 109, 90, .05); }
+.admin-table tbody tr:has(input:focus) { background: rgba(47, 109, 90, .07); box-shadow: inset 3px 0 0 var(--green); }
+.admin-table input[type="text"]:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(47, 109, 90, .12); }
+.admin-table td small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+.admin-table th { text-align: left; color: var(--muted); font-size: 11px; font-weight: 700; padding: 8px 10px; white-space: nowrap; }
+.admin-table td { padding: 10px; vertical-align: middle; }
 .admin-table .delete { border: 1px solid rgba(235,118,94,.45); background: none; color: var(--coral); padding: 6px 12px; font-size: 12px; cursor: pointer; }
 .admin-table .delete:hover { background: var(--coral); color: #fff; }
 .status-pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 10px; font-weight: 700; }
