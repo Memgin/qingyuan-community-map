@@ -275,6 +275,20 @@ input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 3px rgba(47,109,90
 .admin-chart-card { padding: 16px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-m); }
 .admin-chart-card h3 { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
 .chart-empty { margin: 0; padding: 30px 0; text-align: center; color: var(--muted); font-size: 12px; }
+/* ---------------- 霓窗仔 IP 展示面板（对齐面板内边距，淡紫底区分品牌区） ---------------- */
+.ip-panel { grid-column: 1 / -1; display: block; padding: 35px clamp(25px, 6vw, 86px); background: #ece6f2; }
+.ip-panel h2 { margin: 0; font-family: "Noto Serif SC", serif; font-size: 24px; }
+.ip-head { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.ip-intro { max-width: 340px; }
+.ip-intro .eyebrow { margin-bottom: 8px; }
+.ip-text { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.ip-viewer { flex: 1; min-width: 300px; max-width: 520px; }
+.ip-viewer model-viewer { display: block; width: 100%; height: 300px; background: rgba(255, 255, 255, .5); border-radius: var(--radius-m); box-shadow: var(--shadow); }
+.ip-switch { display: flex; gap: 8px; margin-top: 12px; }
+.ip-switch-btn { padding: 6px 14px; border: 1px solid rgba(25, 43, 42, .25); background: #fff; font-size: 12px; color: var(--ink); cursor: pointer; transition: all .15s; }
+.ip-switch-btn:hover { border-color: var(--green); color: var(--green); }
+.ip-switch-btn.on { background: var(--green); border-color: var(--green); color: #fff; }
+
 /* 管理后台子标签总览 chips（带使用次数徽标，点击过滤表格） */
 .tag-overview { display: flex; flex-wrap: wrap; gap: 8px; }
 .tag-overview-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #fff; border: 1px solid var(--line); font-size: 12px; color: var(--ink); cursor: pointer; transition: all .15s; }

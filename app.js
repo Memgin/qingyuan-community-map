@@ -749,6 +749,13 @@ document.querySelector("#clearRouteButton").addEventListener("click", () => {
 // 筛选状态 chip：点击取消子标签筛选
 document.querySelector("#tagFilterChip").addEventListener("click", () => setTagFilter(""));
 
+/* ---------------- 霓窗仔 IP 展示：三个版本模型切换 ---------------- */
+document.querySelectorAll(".ip-switch-btn").forEach((button) => button.addEventListener("click", () => {
+  const model = document.querySelector("#ipModel");
+  if (model) model.src = button.dataset.model;
+  document.querySelectorAll(".ip-switch-btn").forEach((b) => b.classList.toggle("on", b === button));
+}));
+
 /* ---------------- 推荐路线暂存 + 路线编辑器（主地图大画布上调整顺序/增删点位） ---------------- */
 const ROUTE_DRAFT_KEY = "qingyuan-route-draft";
 const routeEditorPanel = document.querySelector("#routeEditorPanel");
