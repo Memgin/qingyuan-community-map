@@ -14,7 +14,7 @@
   --radius-l: 22px;
   --shadow: 0 8px 30px rgba(0, 0, 0, .08), 0 2px 8px rgba(0, 0, 0, .04);
   --shadow-lift: 0 18px 50px rgba(0, 0, 0, .12), 0 4px 12px rgba(0, 0, 0, .06);
-  --font-stack: "Space Grotesk", "Noto Sans SC", sans-serif;
+  --font-stack: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
