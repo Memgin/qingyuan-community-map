@@ -251,14 +251,14 @@ function renderAllSpotsTable() {
   const spotTagsText = (spot) => spotTagsOf(spot).join("，");
   // 表格化布局：分类下拉与子标签输入均为失焦即保存，状态用彩色胶囊标签
   allSpotsList.innerHTML = spots.length ? `<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>地点</th><th>状态</th><th>分类</th><th>子标签</th><th>点赞</th><th>加入时间</th><th>操作</th></tr></thead><tbody>${spots.map((spot) => `<tr>
-      <td><strong>${escapeHTML(spot.name)}</strong><small>${escapeHTML(spot.address || spot.description || "")}</small></td>
-      <td><span class="status-pill ${spot.status}">${escapeHTML(STATUS_LABELS[spot.status] || spot.status)}</span></td>
-      <td><select data-category-id="${spot.id}">${categoryOptions(spot)}</select></td>
-      <td><input type="text" class="admin-tags" data-tags-id="${spot.id}" value="${escapeHTML(spotTagsText(spot))}" maxlength="60" placeholder="逗号分隔，最多 5 个"></td>
-      <td>${spot.likes}</td>
-      <td>${escapeHTML((spot.created_at || "").slice(0, 16))}</td>
-      <td><button class="delete" data-delete-id="${spot.id}" type="button">删除</button></td>
-    </tr>`).join("")}</tbody></table></div>` : (tagOverviewFilter ? `<p>没有带「${escapeHTML(tagOverviewFilter)}」子标签的地点。</p>` : "<p>没有找到匹配的地点。</p>");
+    <td data-label="地点"><strong>${escapeHTML(spot.name)}</strong><small>${escapeHTML(spot.address || spot.description || "")}</small></td>
+    <td data-label="状态"><span class="status-pill ${spot.status}">${escapeHTML(STATUS_LABELS[spot.status] || spot.status)}</span></td>
+    <td data-label="分类"><select data-category-id="${spot.id}">${categoryOptions(spot)}</select></td>
+    <td data-label="子标签"><input type="text" class="admin-tags" data-tags-id="${spot.id}" value="${escapeHTML(spotTagsText(spot))}" maxlength="60" placeholder="逗号分隔，最多 5 个"></td>
+    <td data-label="点赞">${spot.likes}</td>
+    <td data-label="加入时间">${escapeHTML((spot.created_at || "").slice(0, 16))}</td>
+    <td data-label="操作"><button class="delete" data-delete-id="${spot.id}" type="button">删除</button></td>
+  </tr>`).join("")}</tbody></table></div>` : (tagOverviewFilter ? `<p>没有带「${escapeHTML(tagOverviewFilter)}」子标签的地点。</p>` : "<p>没有找到匹配的地点。</p>");
   allSpotsList.querySelectorAll("button[data-delete-id]").forEach((button) => button.addEventListener("click", () => deleteSpot(button.dataset.deleteId)));
   // 分类下拉选择即保存：成功后刷新以维持分类筛选的正确性，失败回滚显示
   allSpotsList.querySelectorAll("select[data-category-id]").forEach((select) => select.addEventListener("change", async () => {
