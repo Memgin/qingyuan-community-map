@@ -579,13 +579,15 @@ function highlightSpots(ids, silentToast = false) {
 }
 
 /* ---------------- 推荐路线：向导区下方可交互小地图（为路线编辑预留） ---------------- */
-let routeOverlay = { polyline: null, badges: [], roadLines: [] };
+let routeOverlay = { polyline: null, badges: [], roadLines: [], straightLines: [] };
 const routePlanTokens = { guide: 0, editor: 0 };
 
 function clearRoute() {
   if (routeOverlay.polyline && guideMap) { guideMap.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
   if (routeOverlay.roadLines?.length && guideMap) guideMap.remove(routeOverlay.roadLines);
   routeOverlay.roadLines = [];
+  if (routeOverlay.straightLines?.length && guideMap) guideMap.remove(routeOverlay.straightLines);
+  routeOverlay.straightLines = [];
   if (guideMap) routeOverlay.badges.forEach((badge) => guideMap.remove(badge));
   routeOverlay.badges = [];
   const container = document.querySelector("#guideMap");
@@ -620,24 +622,45 @@ function orderRouteSpots(spots) {
 /* ---------------- 路线贴合道路：高德驾车路径规划逐段取道路点串 ----------------
    相邻点位两两规划（2-10 个点即 1-9 次请求），任一段失败整体降级为直线虚线；
    token 防竞态：连续调序/重画时只保留最后一次规划结果 */
-async function planRoadSegments(spots, token, tokenBox, channel) {
+/* 相邻点位过近时驾车规划会返回 no_data（起终点几乎重合），直接直线连接；
+   单段规划失败也不再拖垮整条线：失败段画短直线兜底，成功段照常贴合道路 */
+const ROUTE_NEAR_METERS = 120;
+function spotDistanceMeters(a, b) {
+  const rad = Math.PI / 180;
+  const x = (b.lng - a.lng) * rad * Math.cos(((a.lat + b.lat) / 2) * rad);
+  const y = (b.lat - a.lat) * rad;
+  return Math.sqrt(x * x + y * y) * 6371000;
+}
+
+async function planRouteLines(spots, token, tokenBox, channel) {
   // token 为本次规划的快照值，tokenBox[channel] 为该渠道当前值——不一致即被新的规划取代
   const isStale = () => token !== tokenBox[channel];
   await new Promise((resolve) => AMap.plugin("AMap.Driving", resolve));
   if (isStale()) return null;
   const driving = new AMap.Driving({ policy: AMap.DrivingPolicy.LEAST_TIME });
-  const segments = [];
+  const roadPaths = [];
+  const straightPaths = [];
   for (let i = 0; i < spots.length - 1; i++) {
+    const a = spots[i];
+    const b = spots[i + 1];
+    if (isStale()) return null;
+    if (spotDistanceMeters(a, b) < ROUTE_NEAR_METERS) {
+      straightPaths.push([[a.lng, a.lat], [b.lng, b.lat]]);
+      continue;
+    }
     const outcome = await new Promise((resolve) => {
-      driving.search(new AMap.LngLat(spots[i].lng, spots[i].lat), new AMap.LngLat(spots[i + 1].lng, spots[i + 1].lat), (status, result) => resolve({ status, result }));
+      driving.search(new AMap.LngLat(a.lng, a.lat), new AMap.LngLat(b.lng, b.lat), (status, result) => resolve({ status, result }));
     });
     if (isStale()) return null;
-    if (outcome.status !== "complete" || !outcome.result?.routes?.length) return null;
-    const path = [];
-    outcome.result.routes[0].steps.forEach((step) => path.push(...step.path));
-    segments.push(path);
+    if (outcome.status === "complete" && outcome.result?.routes?.length) {
+      const path = [];
+      outcome.result.routes[0].steps.forEach((step) => path.push(...step.path));
+      roadPaths.push(path);
+    } else {
+      straightPaths.push([[a.lng, a.lat], [b.lng, b.lat]]);
+    }
   }
-  return segments;
+  return { roadPaths, straightPaths };
 }
 
 function addRoadPolylines(targetMap, segments, color, zIndex) {
@@ -683,11 +706,13 @@ async function drawRoute(spots) {
   };
   nudgeRepaint();
   setTimeout(nudgeRepaint, 400);
-  // 道路贴合：规划成功即替换直线，失败保留虚线（不阻塞交互）
-  const segments = await planRoadSegments(ordered, planToken, routePlanTokens, "guide");
-  if (segments) {
+  // 道路贴合：逐段规划，成功段替换为道路实线、失败/过近段保留短直线兜底
+  const lines = await planRouteLines(ordered, planToken, routePlanTokens, "guide");
+  if (lines) {
     if (routeOverlay.polyline && guideMap) { gm.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
-    routeOverlay.roadLines = addRoadPolylines(gm, segments, "#2F80ED", 80);
+    routeOverlay.roadLines = addRoadPolylines(gm, lines.roadPaths, "#2F80ED", 80);
+    routeOverlay.straightLines = lines.straightPaths.map((path) => new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true, zIndex: 80 }));
+    if (routeOverlay.straightLines.length) gm.add(routeOverlay.straightLines);
     gm.setFitView(null, false, [40, 40, 40, 40]);
   }
 }
@@ -704,7 +729,7 @@ document.querySelector("#tagFilterChip").addEventListener("click", () => setTagF
 /* ---------------- 推荐路线暂存 + 路线编辑器（主地图大画布上调整顺序/增删点位） ---------------- */
 const ROUTE_DRAFT_KEY = "qingyuan-route-draft";
 const routeEditorPanel = document.querySelector("#routeEditorPanel");
-let routeEditor = { spots: [], polyline: null, markers: [], roadLines: [] };
+let routeEditor = { spots: [], polyline: null, markers: [], roadLines: [], straightLines: [] };
 
 function readRouteDraft() { try { return JSON.parse(localStorage.getItem(ROUTE_DRAFT_KEY)) || null; } catch { return null; } }
 function writeRouteDraft(draft) { try { localStorage.setItem(ROUTE_DRAFT_KEY, JSON.stringify(draft)); } catch { /* 存储不可用时忽略 */ } }
@@ -725,10 +750,12 @@ async function drawRouteEditorOverlay() {
     map.add(marker);
     routeEditor.markers.push(marker);
   });
-  const segments = await planRoadSegments(routeEditor.spots, planToken, routePlanTokens, "editor");
-  if (segments) {
+  const lines = await planRouteLines(routeEditor.spots, planToken, routePlanTokens, "editor");
+  if (lines) {
     if (routeEditor.polyline) { map.remove(routeEditor.polyline); routeEditor.polyline = null; }
-    routeEditor.roadLines = addRoadPolylines(map, segments, "#E67E22", 90);
+    routeEditor.roadLines = addRoadPolylines(map, lines.roadPaths, "#E67E22", 90);
+    routeEditor.straightLines = lines.straightPaths.map((path) => new AMap.Polyline({ path, strokeColor: "#E67E22", strokeWeight: 6, strokeOpacity: .9, strokeStyle: "dashed", showDir: true, zIndex: 90 }));
+    if (routeEditor.straightLines.length) map.add(routeEditor.straightLines);
   }
 }
 
@@ -763,6 +790,7 @@ function renderRouteEditor() {
 function closeRouteEditor() {
   if (routeEditor.polyline) { map.remove(routeEditor.polyline); routeEditor.polyline = null; }
   if (routeEditor.roadLines?.length) { map.remove(routeEditor.roadLines); routeEditor.roadLines = []; }
+  if (routeEditor.straightLines?.length) { map.remove(routeEditor.straightLines); routeEditor.straightLines = []; }
   routeEditor.markers.forEach((marker) => map.remove(marker));
   routeEditor.markers = [];
   routeEditorPanel.hidden = true;
