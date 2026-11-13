@@ -579,10 +579,13 @@ function highlightSpots(ids, silentToast = false) {
 }
 
 /* ---------------- 推荐路线：向导区下方可交互小地图（为路线编辑预留） ---------------- */
-let routeOverlay = { polyline: null, badges: [] };
+let routeOverlay = { polyline: null, badges: [], roadLines: [] };
+const routePlanTokens = { guide: 0, editor: 0 };
 
 function clearRoute() {
   if (routeOverlay.polyline && guideMap) { guideMap.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
+  if (routeOverlay.roadLines?.length && guideMap) guideMap.remove(routeOverlay.roadLines);
+  routeOverlay.roadLines = [];
   if (guideMap) routeOverlay.badges.forEach((badge) => guideMap.remove(badge));
   routeOverlay.badges = [];
   const container = document.querySelector("#guideMap");
@@ -614,7 +617,34 @@ function orderRouteSpots(spots) {
   return ordered;
 }
 
-function drawRoute(spots) {
+/* ---------------- 路线贴合道路：高德驾车路径规划逐段取道路点串 ----------------
+   相邻点位两两规划（2-10 个点即 1-9 次请求），任一段失败整体降级为直线虚线；
+   token 防竞态：连续调序/重画时只保留最后一次规划结果 */
+async function planRoadSegments(spots, token, tokenBox) {
+  await new Promise((resolve) => AMap.plugin("AMap.Driving", resolve));
+  if (token !== tokenBox.value) return null;
+  const driving = new AMap.Driving({ policy: AMap.DrivingPolicy.LEAST_TIME });
+  const segments = [];
+  for (let i = 0; i < spots.length - 1; i++) {
+    const outcome = await new Promise((resolve) => {
+      driving.search(new AMap.LngLat(spots[i].lng, spots[i].lat), new AMap.LngLat(spots[i + 1].lng, spots[i + 1].lat), (status, result) => resolve({ status, result }));
+    });
+    if (token !== tokenBox.value) return null;
+    if (outcome.status !== "complete" || !outcome.result?.routes?.length) return null;
+    const path = [];
+    outcome.result.routes[0].steps.forEach((step) => path.push(...step.path));
+    segments.push(path);
+  }
+  return segments;
+}
+
+function addRoadPolylines(targetMap, segments, color, zIndex) {
+  const polylines = segments.map((path) => new AMap.Polyline({ path, strokeColor: color, strokeWeight: 6, strokeOpacity: .9, showDir: true, lineJoin: "round", zIndex }));
+  targetMap.add(polylines);
+  return polylines;
+}
+
+async function drawRoute(spots) {
   clearRoute();
   if (spots.length < 2) return;
   const ordered = orderRouteSpots(spots);
@@ -629,7 +659,8 @@ function drawRoute(spots) {
   if (editorButton) editorButton.hidden = false;
   // 容器此时已是最终尺寸（display 显隐，无高度动画），可直接创建地图
   const gm = ensureGuideMap();
-  // 路线画在向导区小地图上（主地图只高亮）：虚线连接 + 序号标记
+  const planToken = ++routePlanTokens.guide;
+  // 路线画在向导区小地图上（主地图只高亮）：先以直线虚线占位，随后尝试替换为贴合道路的实线
   routeOverlay.polyline = new AMap.Polyline({ path, strokeColor: "#2F80ED", strokeWeight: 5, strokeOpacity: 0.85, strokeStyle: "dashed", showDir: true, zIndex: 80 });
   gm.add(routeOverlay.polyline);
   ordered.forEach((spot, index) => {
@@ -650,6 +681,13 @@ function drawRoute(spots) {
   };
   nudgeRepaint();
   setTimeout(nudgeRepaint, 400);
+  // 道路贴合：规划成功即替换直线，失败保留虚线（不阻塞交互）
+  const segments = await planRoadSegments(ordered, planToken, routePlanTokens.guide);
+  if (segments) {
+    if (routeOverlay.polyline && guideMap) { gm.remove(routeOverlay.polyline); routeOverlay.polyline = null; }
+    routeOverlay.roadLines = addRoadPolylines(gm, segments, "#2F80ED", 80);
+    gm.setFitView(null, false, [40, 40, 40, 40]);
+  }
 }
 
 document.querySelector("#clearRouteButton").addEventListener("click", () => {
@@ -664,17 +702,20 @@ document.querySelector("#tagFilterChip").addEventListener("click", () => setTagF
 /* ---------------- 推荐路线暂存 + 路线编辑器（主地图大画布上调整顺序/增删点位） ---------------- */
 const ROUTE_DRAFT_KEY = "qingyuan-route-draft";
 const routeEditorPanel = document.querySelector("#routeEditorPanel");
-let routeEditor = { spots: [], polyline: null, markers: [] };
+let routeEditor = { spots: [], polyline: null, markers: [], roadLines: [] };
 
 function readRouteDraft() { try { return JSON.parse(localStorage.getItem(ROUTE_DRAFT_KEY)) || null; } catch { return null; } }
 function writeRouteDraft(draft) { try { localStorage.setItem(ROUTE_DRAFT_KEY, JSON.stringify(draft)); } catch { /* 存储不可用时忽略 */ } }
 function clearRouteDraft() { localStorage.removeItem(ROUTE_DRAFT_KEY); }
 
-function drawRouteEditorOverlay() {
+async function drawRouteEditorOverlay() {
   if (routeEditor.polyline) { map.remove(routeEditor.polyline); routeEditor.polyline = null; }
+  if (routeEditor.roadLines?.length) { map.remove(routeEditor.roadLines); routeEditor.roadLines = []; }
   routeEditor.markers.forEach((marker) => map.remove(marker));
   routeEditor.markers = [];
   if (routeEditor.spots.length < 2) return;
+  const planToken = ++routePlanTokens.editor;
+  // 先以直线占位（调序立即有反馈），随后替换为贴合道路的实线
   routeEditor.polyline = new AMap.Polyline({ path: routeEditor.spots.map((spot) => [spot.lng, spot.lat]), strokeColor: "#E67E22", strokeWeight: 6, strokeOpacity: .9, showDir: true, zIndex: 90 });
   map.add(routeEditor.polyline);
   routeEditor.spots.forEach((spot, index) => {
@@ -682,6 +723,11 @@ function drawRouteEditorOverlay() {
     map.add(marker);
     routeEditor.markers.push(marker);
   });
+  const segments = await planRoadSegments(routeEditor.spots, planToken, routePlanTokens.editor);
+  if (segments) {
+    if (routeEditor.polyline) { map.remove(routeEditor.polyline); routeEditor.polyline = null; }
+    routeEditor.roadLines = addRoadPolylines(map, segments, "#E67E22", 90);
+  }
 }
 
 function renderRouteEditor() {
@@ -714,6 +760,7 @@ function renderRouteEditor() {
 
 function closeRouteEditor() {
   if (routeEditor.polyline) { map.remove(routeEditor.polyline); routeEditor.polyline = null; }
+  if (routeEditor.roadLines?.length) { map.remove(routeEditor.roadLines); routeEditor.roadLines = []; }
   routeEditor.markers.forEach((marker) => map.remove(marker));
   routeEditor.markers = [];
   routeEditorPanel.hidden = true;
