@@ -237,7 +237,7 @@ button { cursor: pointer; }
    覆盖长行内旧的 .private-panel grid/flex 规则 */
 .private-panel { grid-column: 1 / -1; display: block; padding: 35px clamp(25px, 6vw, 86px); background: #e3ede4; }
 .private-panel h2 { margin: 0; font-family: "Noto Serif SC", serif; font-size: 24px; }
-.private-head { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.private-head { display: flex; align-items: center; justify-content: flex-start; gap: 24px; flex-wrap: wrap; }
 .private-intro { max-width: 340px; }
 .private-intro .eyebrow { margin-bottom: 8px; }
 .private-intro-text { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
