@@ -767,17 +767,20 @@ function renderRouteEditor() {
     [routeEditor.spots[index - 1], routeEditor.spots[index]] = [routeEditor.spots[index], routeEditor.spots[index - 1]];
     renderRouteEditor();
     drawRouteEditorOverlay();
+    drawRoute(routeEditor.spots); // 实时同步向导区小地图（顺序与路线形状所见即所得）
   }));
   list.querySelectorAll(".re-down").forEach((button) => button.addEventListener("click", () => {
     const index = Number(button.dataset.index);
     [routeEditor.spots[index + 1], routeEditor.spots[index]] = [routeEditor.spots[index], routeEditor.spots[index + 1]];
     renderRouteEditor();
     drawRouteEditorOverlay();
+    drawRoute(routeEditor.spots);
   }));
   list.querySelectorAll(".re-remove").forEach((button) => button.addEventListener("click", () => {
     routeEditor.spots.splice(Number(button.dataset.index), 1);
     renderRouteEditor();
     drawRouteEditorOverlay();
+    drawRoute(routeEditor.spots);
   }));
   // 可添加的点位：全部图钉数据中不在当前路线的
   const candidates = state.mapSpots.filter((spot) => !routeEditor.spots.some((item) => String(item.id) === String(spot.id)));
@@ -820,6 +823,7 @@ document.querySelector("#routeEditorAddButton").addEventListener("click", () => 
   routeEditor.spots.push(spot);
   renderRouteEditor();
   drawRouteEditorOverlay();
+  drawRoute(routeEditor.spots);
 });
 document.querySelector("#saveRouteEditorButton").addEventListener("click", () => {
   const draft = readRouteDraft() || {};
