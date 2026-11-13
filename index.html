@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css">
-  <link rel="stylesheet" href="style.css?v=20261113-48">
+  <link rel="stylesheet" href="style.css?v=20261113-49">
   <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@4.1.0/dist/model-viewer.min.js"></script>
 </head>
@@ -105,16 +105,11 @@
       <div class="guide-head">
         <div class="lumina-viewer">
           <model-viewer id="ipModel" src="models/nichuangzai-festive.glb" alt="Lumina——本项目文创 IP 霓窗仔的 3D 形象（可拖拽旋转）" camera-controls auto-rotate auto-rotate-delay="0" rotation-per-second="18deg" shadow-intensity="1" exposure="1.05" interaction-prompt="none"></model-viewer>
-          <div class="ip-switch">
-            <button type="button" class="ip-switch-btn on" data-model="models/nichuangzai-festive.glb">节庆</button>
-            <button type="button" class="ip-switch-btn" data-model="models/nichuangzai-harbor.glb">海港</button>
-            <button type="button" class="ip-switch-btn" data-model="models/nichuangzai-street.glb">街景</button>
-          </div>
         </div>
         <div class="guide-copy">
           <p class="eyebrow">AI GUIDE / 02</p>
           <h2>不知道去哪？问问 "Lumina"。</h2>
-          <p>Lumina 是本项目文创 IP「霓窗仔」的化身——一只从满洲窗花里走出来的小向导。说出你的需求，它会从已审核点位中整理一条贴路的游览路线。</p>
+          <p>说出你的需求，Lumina 会从已审核点位中整理一条贴路的游览路线。</p>
           <form id="recommendForm"><input id="recommendInput" type="text" placeholder="例如：周末想找一个安静的徒步地方" maxlength="120" required><button class="primary-button" type="submit">开始推荐 <span>→</span></button></form>
         </div>
       </div>
@@ -329,6 +324,6 @@
   <script src="https://webapi.amap.com/maps?v=2.0&key=4c6efd7f9af07c52ec413992cfde2971&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder,AMap.Driving"></script>
   <script src="demo-data.js?v=20261102-1"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/simple-liquid-glass@5.6.0/dist/web-component.esm.js"></script>
-  <script src="app.js?v=20261102-61"></script>
+  <script src="app.js?v=20261102-62"></script>
 </body>
 </html>
