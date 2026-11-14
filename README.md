@@ -1,9 +1,35 @@
-# 清远社区共享地图
+# 清远社区共享地图 · Qingyuan Community Map
 
-一个面向清远本地生活的**社区共建地图**：居民可以提交身边的好去处，系统自动核验地址，其他人可以在地图上发现、收藏、点赞，也可以用自然语言问 AI「附近有什么好玩的」。
+> 面向清远本地生活的**社区共建地图**：居民提交身边的好去处，系统自动核验地址；其他人可以在地图上发现、收藏、点评；一句话让 AI 向导 **Lumina** 生成贴合真实道路的游览路线；支持私人地图协作与只读分享——**网页端、管理后台、HarmonyOS 客户端三端同源**。
 
-- 在线地址：https://qymap.pages.dev
-- 管理后台：https://qymap.pages.dev/admin.html
+[![在线地址](https://img.shields.io/badge/在线地址-qymap.pages.dev-2F6D5A?style=flat-square)](https://qymap.pages.dev)
+[![平台](https://img.shields.io/badge/平台-Web%20·%20HarmonyOS-6E8CA0?style=flat-square)]()
+[![后端](https://img.shields.io/badge/后端-Cloudflare%20Pages%20%2B%20D1%20%2B%20R2-F38020?style=flat-square)]()
+[![AI](https://img.shields.io/badge/AI-智谱%20glm--4.7--flash-7D8BB5?style=flat-square)]()
+[![License](https://img.shields.io/badge/License-MIT-3E7A4E?style=flat-square)](LICENSE)
+
+## 界面预览
+
+| 首屏 | AI 向导 · Lumina | 详情面板 |
+| :---: | :---: | :---: |
+| ![首屏](docs/screenshots/01-首屏.png) | ![AI 向导](docs/screenshots/04-AI向导.png) | ![详情面板](docs/screenshots/05-详情面板.png) |
+
+| 主地图 · 路线编辑 | 最近加入 | 应急地图 |
+| :---: | :---: | :---: |
+| ![路线编辑](docs/screenshots/08-路线编辑器.png) | ![详情](docs/screenshots/02-地图.png) | ![应急](docs/screenshots/06-应急地图.png) |
+
+> 预览截图为 390×844 iPhone 视口，可在 `预览-iPhone/`（本地）查看全套。
+
+## 目录
+
+- [功能特性](#功能特性)
+- [技术架构](#技术架构)
+- [本地运行与部署](#本地运行与部署)
+- [API 接口](#api-接口)
+- [项目结构](#项目结构)
+- [安全说明](#安全说明)
+- [文档](#文档)
+- [待办](#待办)
 
 ---
 
