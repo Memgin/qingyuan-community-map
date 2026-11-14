@@ -1,0 +1,56 @@
+{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\linmi\\.ohos\\config\\default_qymap-harmony_nYlIWnuzM3gHqWDyxgrJaouMFB38Bip8zrsN0s0T_DE=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001A097ED181A7834CEF820D03770606E21D9616D3CE37A30BADCC45240A1D4C4D4192685B2C7305",
+          "profile": "C:\\Users\\linmi\\.ohos\\config\\default_qymap-harmony_nYlIWnuzM3gHqWDyxgrJaouMFB38Bip8zrsN0s0T_DE=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\linmi\\.ohos\\config\\default_qymap-harmony_nYlIWnuzM3gHqWDyxgrJaouMFB38Bip8zrsN0s0T_DE=.p12",
+          "storePassword": "0000001A448ED5C6473039D6B9F79DDF9DBE85366B8F82F04AB80A7B5A8A4DEE4C7762D983CA63FED9CD"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "targetSdkVersion": "26.0.0",
+        "compatibleSdkVersion": "26.0.0",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug",
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}

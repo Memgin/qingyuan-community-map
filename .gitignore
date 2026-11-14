@@ -9,8 +9,10 @@ build/
 .env.*
 *.local
 
-# 鸿蒙 App 工程（暂不公开，本地开发用）
-qymap-harmony/
+# 鸿蒙 App 工程的依赖与构建缓存（源码与配置照常入库）
+qymap-harmony/oh_modules/
+qymap-harmony/.hvigor/
+qymap-harmony/build/
 
 # 日志与临时文件
 *.log

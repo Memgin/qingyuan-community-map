@@ -1,0 +1,20 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "清远社区共享地图 · 鸿蒙客户端"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "清远社区共享地图主入口"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "清远地图"
+    },
+    {
+      "name": "location_reason",
+      "value": "用于在地图上显示你附近的社区点位并计算推荐距离"
+    }
+  ]
+}
