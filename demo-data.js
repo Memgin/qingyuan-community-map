@@ -82,38 +82,61 @@
       nextReviewId: Math.max(100, maxReviewId + 1)
     };
   }
+  /* ---------------- 私人地图演示种子 ---------------- */
+  // 登录（演示账号 chen_foodie，用户 id=1）后即可演示：地图列表 / 收藏 / 协作 / 分享 / 回收站
+  function buildDemoMaps(spots) {
+    const list = Array.isArray(spots) ? spots : [];
+    const pick = (category, n) => list.filter((s) => s.category === category).slice(0, n).map((s) => s.id);
+    const scenic = pick("scenic", 4);
+    const food = pick("food", 3);
+    const shopping = pick("shopping", 2);
+    const stamp = (daysAgo) => new Date(Date.now() - daysAgo * 864e5).toISOString().slice(0, 19).replace("T", " ");
+    return {
+      maps: [
+        { id: 1, user_id: 1, name: "周末遛娃清单", description: "公园、商圈和能坐下来慢慢吃饭的地方", created_at: stamp(6) },
+        { id: 2, user_id: 1, name: "北江边的日与夜", description: "散步、看日落、吃河鲜", created_at: stamp(2), share_token: "8f3c1a9d4b7e2f60a5c8d1e4f7b0a3c6" },
+        { id: 3, user_id: 1, name: "旧版收藏（已删除）", description: "演示回收站：30 天内可恢复", created_at: stamp(9), deleted_at: stamp(2) }
+      ],
+      mapSpots: {
+        1: [...scenic.slice(0, 3), ...food.slice(0, 1)],
+        2: [...food.slice(1, 3), ...scenic.slice(3, 4)],
+        3: [...shopping]
+      },
+      collab: { 1: [2] }, // 清远小灵通（用户 2）作为「周末遛娃清单」的协作者
+      nextMapId: 4
+    };
+  }
+
   function defaultStore() {
     const remote = remoteSeeds();
+    const spots = remote ? remote.spots : JSON.parse(JSON.stringify(seedSpots));
+    const demoMaps = buildDemoMaps(spots); // 私人地图演示种子（清单/协作/已分享/回收站）
     if (remote) {
       return {
         users: remote.users,
-        spots: remote.spots,
+        spots,
         reviews: remote.reviews,
         photos: remote.photos,
         likedBy: {},
         currentUser: null,
         nextReviewId: remote.nextReviewId,
-        maps: [],
-        mapSpots: {},
-        nextMapId: 1,
-        collab: {},
+        ...demoMaps,
         nextUserId: 1000,
+        seeded_maps: true,
         data_source: remote.marker
       };
     }
     return {
       users: JSON.parse(JSON.stringify(seedUsers)),
-      spots: JSON.parse(JSON.stringify(seedSpots)),
+      spots,
       reviews: JSON.parse(JSON.stringify(seedReviews)),
       photos: {},
       likedBy: {},
       currentUser: null,
       nextReviewId: 100,
-      maps: [],
-      mapSpots: {},
-      nextMapId: 1,
-      collab: {},
+      ...demoMaps,
       nextUserId: 1000,
+      seeded_maps: true,
       data_source: "builtin"
     };
   }
@@ -143,6 +166,16 @@
           // 旧版本演示数据没有密码字段，统一补默认密码，保证「登录必须密码正确」对存量数据也生效
           store.users.forEach((user) => { if (typeof user.password !== "string") user.password = DEMO_PASSWORD; });
           if (!store.photos || typeof store.photos !== "object") store.photos = {};
+          // 私人地图演示种子：旧缓存没有时补一次（不覆盖用户已建地图，也不重复注入）
+          if (!store.seeded_maps && (!Array.isArray(store.maps) || store.maps.length === 0)) {
+            const demo = buildDemoMaps(store.spots);
+            store.maps = demo.maps;
+            store.mapSpots = demo.mapSpots;
+            store.collab = demo.collab;
+            store.nextMapId = demo.nextMapId;
+            store.seeded_maps = true;
+            persistStore(store);
+          }
           // 数据源变化（线上快照更新 / 无快照回退内置数据）：重建种子，保留登录用户
           if (store.data_source !== dataSourceMarker()) {
             const fresh = defaultStore();
@@ -414,7 +447,7 @@
       const category = url.searchParams.get("category");
       if (category) spots = spots.filter((spot) => spot.category === category);
       const q = (url.searchParams.get("q") || "").trim().toLowerCase();
-      if (q) spots = spots.filter((spot) => `${spot.name} ${spot.description}`.toLowerCase().includes(q));
+      if (q) spots = spots.filter((spot) => `${spot.name} ${spot.description} ${(Array.isArray(spot.tags) ? spot.tags.join(" ") : "")}`.toLowerCase().includes(q));
       spots.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
       const page = Math.max(1, Number(url.searchParams.get("page") || 1));
       const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") || 20)));

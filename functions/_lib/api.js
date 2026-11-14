@@ -178,7 +178,8 @@ async function listSpots(request, url, env) {
   const conditions = ["status = 'approved'"];
   const bindings = [];
   if (CATEGORIES.has(category)) { conditions.push("category = ?"); bindings.push(category); }
-  if (query) { conditions.push("(name LIKE ? OR description LIKE ?)"); bindings.push(`%${query}%`, `%${query}%`); }
+  // 搜索同时匹配名称、简介与子标签（tags 为 JSON 数组字符串，LIKE %q% 命中即视为该地点带此标签）
+  if (query) { conditions.push("(name LIKE ? OR description LIKE ? OR tags LIKE ?)"); bindings.push(`%${query}%`, `%${query}%`, `%"${query}"%`); }
   // 子标签筛选：tags 列存 JSON 数组字符串，按 "标签" 精确匹配；标签格式非法时忽略该参数
   const tagFilter = url.searchParams.get("tag");
   if (tagFilter && /^[\w\u4e00-\u9fff-]{1,10}$/.test(tagFilter)) { conditions.push("tags LIKE ?"); bindings.push(`%"${tagFilter}"%`); }

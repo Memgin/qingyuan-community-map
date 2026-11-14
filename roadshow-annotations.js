@@ -76,63 +76,77 @@
 
   const INDEX_ANNOTATIONS = [
     { no: "S1", type: "feature", anchor: ".intro-panel", side: "right", title: "社区共建地图 · 项目定位",
-      lines: ["是什么：居民提交身边好去处，系统自动核验坐标与名称，沉淀成人人共享的社区地图。",
-              "解决的痛点：本地好去处散在群聊、朋友圈里，看完就沉底，无法沉淀、搜索、复用。",
-              "模式创新：UGC 提交 + 自动核验 + AI 推荐三位一体，把「记录城市」的门槛降到随手一填。"] },
+      lines: ["模块内容：品牌区 + 核心动作「添加一个地点」+ 已收录点位数，是评委进入后的第一屏。",
+              "功能分层：基础必选＝浏览/提交/点评/收藏/审核；亮点创新＝AI 向导、应急地图、私人地图协作分享；拓展实验＝鸿蒙端、离线同步。",
+              "数据来源：spotCount 由 /api/spots 返回的 total 实时渲染，不是写死的数字。",
+              "设计意图：把「这是什么产品、现在多大规模、从哪进入」压进一屏，评委 10 秒建立认知。"] },
     { no: "S2", type: "arch", anchor: ".topbar", side: "left", title: "整体架构：三端一云",
-      lines: ["前端：原生 HTML/CSS/JS 零框架，液态玻璃等视觉层为独立 Web Component，失败自动降级。",
-              "后端：Cloudflare Pages Functions 无框架路由，70+ REST 接口一套代码服务网页端与鸿蒙 App。",
-              "存储：D1(SQLite) 26 个迁移脚本管理演进 + R2 对象存储；高德/智谱/华为推送即插即用。",
-              "为什么这么设计：全 Serverless 零运维零成本；同源同 API 让多端同步只需一个增量参数。"] },
+      lines: ["前端分层：静态 HTML 骨架 → app.js 集中状态机（state + render 三件套）→ apiFetch 统一网络层 → demo-data.js 本地兜底。",
+              "服务端：functions/api/[[path]].js 单入口路由 → _lib/api.js 实现 70+ REST，原生 Request/Response，无框架。",
+              "数据层：D1(SQLite) 以 26 个迁移脚本管理演进；R2 存图片；高德/智谱/华为推送全部 REST 封装。",
+              "鉴权：Bearer Token（用户）+ X-Owner-Token（提交归属）+ X-Actor-Token（设备匿名身份）三类身份分开。",
+              "设计理由：全 Serverless 零运维零成本；同源同 API，网页端与鸿蒙端同步只差一个 since 增量参数。"] },
     { no: "S3", type: "feature", anchor: ".map-panel", side: "left", title: "地图浏览与分类筛选",
-      lines: ["六大分类（景点/美食/商圈/医疗/校园/交通）莫兰迪色系图钉，点图钉定位、一键导航。",
-              "分类筛选即点即筛，筛选逻辑全部在后端 SQL 完成，低端手机也流畅。",
-              "图例与卡片、图表全局同一套色系，颜色即分类语义。"] },
+      lines: ["数据流：GET /api/spots?fields=map 拉全量轻量坐标 → renderMarkers 生成高德 Marker → 点击出弹窗或进详情。",
+              "六大分类（景点/美食/商圈/医疗/校园/交通）莫兰迪色系图钉，颜色即分类语义，高亮态换珊瑚色脉冲光环。",
+              "分类筛选：切换即带 category 参数请求后端，地图与列表同步刷新，前端不做本地过滤。",
+              "点击图钉定位，弹窗内可直接导航；跳转前 sendBeacon 上报，埋点不阻塞跳转。"] },
     { no: "S3", type: "tech", anchor: ".map-legend", side: "left", title: "地图层技术实现",
-      lines: ["高德 JS API 2.0；图钉为自绘 SVG 水滴形：分类色圆头 + 白图标 + 落地投影 + 高亮脉冲光环。",
-              "fields=map 轻量字段接口一次拉全量坐标，列表分页不影响地图完整展示。",
-              "向导区小地图强制 Canvas2D 渲染，规避 Windows Chrome WebGPU 重复申请失败的空白画布。"] },
+      lines: ["高德 JS API 2.0，viewMode 2D；向导区小地图强制 Canvas2D 渲染，规避 Windows Chrome WebGPU 二次申请失败的空白画布。",
+              "图钉自绘 SVG：分类色圆头 + 白图标 + 落地投影 + 高亮光环，统一由 markerIcon(category, highlighted) 生成。",
+              "fields=map 只取坐标/名称/分类等轻量字段——列表分页时地图仍展示全部点位，不只剩当前页。",
+              "marker 实例统一存 state.markers，筛选/搜索时批量重建，避免实例泄漏。"] },
     { no: "S3", type: "feature", anchor: ".recent-panel", side: "left", title: "热门地点榜 · 综合热度算法",
-      lines: ["热度 = 点赞×1 + 点评×2 + 导航×2：越多人互动越靠前，把「用得多的」推给新用户。",
-              "后端真分页 + SQL 关键词搜索（250ms 防抖），列表翻页不卡顿。",
-              "卡片信息设计：封面锚点（无图用分类色渐变占位）+ 星级均分 + 子标签行，一眼读完。"] },
+      lines: ["热度 = 点赞×1 + 点评×2 + 导航×2，后端 SQL 计算 hot_score，sort=hot 直接按热度排序。",
+              "真分页（page/limit）+ 关键词搜索（q 匹配名称与简介），输入 250ms 防抖后才发请求。",
+              "卡片信息：封面（无图用分类色渐变占位）+ 星级均分 + 子标签 + 互动行，一屏读完。",
+              "加载体验：微光骨架屏占位；断网时读本地缓存兜底，不会出现空白列表。"] },
     { no: "S4", type: "feature", anchor: "#detailPanel", side: "right", title: "详情就地面板 · 社区点评", open: "#spotList .spot-card",
-      lines: ["点详情不弹窗：左侧就地切换详情页，右侧地图保留、图钉高亮——浏览动线不中断。",
-              "评分摘要（星级 + 均分 + 条数）由列表接口子查询聚合，零二次请求。",
-              "点评一人一店一条（重复提交即修改）；社区照片墙自动轮播 + 灯箱放大，任何登录用户可补图。"] },
+      lines: ["交互：点卡片 → 左侧 intro 区就地切换为详情面板，右侧地图保留并高亮对应图钉，返回一键还原。",
+              "数据：GET /api/spots/:id/reviews 一次返回点评列表 + 均分/条数统计，无二次请求。",
+              "点评规则：一人一店一条（UPSERT，再提交即修改），可随时切换匿名/实名，作者本人可删。",
+              "照片墙：/api/spots/:id/photos，Carousel 4 秒自动轮播 + 触摸滑动 + 灯箱放大，登录用户可补图。"] },
     { no: "S4", type: "tech", anchor: "#detailPanel", side: "left", title: "匿名点评的隐私实现", open: "#spotList .spot-card",
-      lines: ["核心设计：匿名点评后端不返回任何作者字段（无 user_id / 昵称 / 头像），数据层面无法反查账号。",
-              "配套脱敏：对外只暴露「昵称 + 用户 ID」，公开主页只聚合非匿名点评，注册时间只到日期。",
-              "防滥用：写入限流 20 条/小时；匿名点评仅作者本人可删。"] },
+      lines: ["隐私核心：匿名点评在接口层就不返回任何作者字段（无 user_id / 昵称 / 头像），前端拿到也无法反查账号。",
+              "对外脱敏：只暴露「昵称 + 用户 ID」；公开主页只聚合非匿名点评，注册时间只到日期。",
+              "防滥用：每账号 20 条/小时写入限流；匿名点评仅作者本人可删。",
+              "聚合：avg_rating / review_count 以子查询随列表返回，避免 N+1 请求。"] },
     { no: "S5", type: "feature", anchor: "#addSpotButton", side: "right", title: "提交点位 · 自动核验",
-      lines: ["名称命中高德 POI 即自动上线、坐标自动校正——免人工审核，审核成本从人转到机器。",
-              "多图上传：最多 10 张 / 20MB，第一张自动作封面。",
-              "子标签「创建即沉淀」：表单标签建议来自该分类现存标签聚合（/api/tags 按使用次数排序），用户输入新标签即扩充分类体系。"] },
+      lines: ["表单内容：名称、地址（高德搜索定位）、分类、子标签（最多 5 个）、一句话简介、多图。",
+              "自动核验：POST /api/spots 后端调高德 POI 检索，名称命中即置 approved 直接上线，坐标以 POI 结果校正。",
+              "子标签：建议来自 /api/tags 按使用次数聚合 + 预设 + 自定义，输入即创建、点击即筛选。",
+              "图片：/api/uploads 上传至 R2，首页图作封面，其余进详情照片墙。"] },
     { no: "S5", type: "tech", anchor: "#modalBackdrop .modal", side: "left", title: "提交链路的三道保险", open: "#addSpotButton",
-      lines: ["重复拦截：同名同分类、或坐标距离 < 0.001 度判为重复提交。",
-              "幂等设计：请求体带 client_token，同一条提交重复发送只写入一次。",
-              "离线可靠：断网提交先入队，联网自动重发；列表数据本地缓存兜底，弱网不白屏。"] },
+      lines: ["判重：同名同分类，或坐标距离 < 0.001 度，直接拒绝，防止重复点位。",
+              "幂等：请求体带 client_token，同一条提交重复发送只入库一次。",
+              "离线：断网提交进 outbox 队列，联网自动重发；列表与地图数据本地缓存兜底。",
+              "归属与安全：X-Owner-Token 标记提交者；图片校验文件头与大小，拒绝外链 URL。"] },
     { no: "S6", type: "feature", anchor: ".recommend-panel", side: "right", title: "AI 向导 Lumina · 智能路线",
-      lines: ["自然语言提问 → 中文推荐文案 + 地图高亮对应点位，从「搜关键词」升级到「说需求」。",
-              "推荐点位按最近邻贪心排序，连成游览路线画在小地图上，闭环到路线编辑器（调序/增删/保存）。",
-              "季节推荐：按当前月份把应季主题排最前并高亮，一键触发。"] },
+      lines: ["流程：输入自然语言需求 → POST /api/recommend → 中文推荐文案 + 命中点位 → 地图高亮 + 路线小地图。",
+              "路线：orderRouteSpots 最近邻贪心排序，AMap.Driving 取真实道路折线，蓝虚线 + 序号标记。",
+              "编辑器：↑↓ 调序 / 移除 / 添加后保存，右侧主地图实时重画橙色路线。",
+              "季节推荐：SEASON_THEMES 按当前月份把应季主题排最前，一键触发推荐。"] },
     { no: "S6", type: "tech", anchor: ".recommend-panel", side: "left", title: "AI 工程化实现",
-      lines: ["接入智谱 GLM（OpenAI 兼容格式）；主模型限流自动降级备用模型，25 秒超时保护。",
-              "结果缓存：相同需求 + 约 1km 精度视野 24 小时内直接复用，热门问题零模型配额、秒回。",
-              "推荐结果本地暂存，强制刷新后自动恢复（文字 + 高亮 + 路线）。"] },
+      lines: ["模型：智谱 GLM（OpenAI 兼容格式）；主模型限流自动降级备用模型，AbortController 25 秒超时保护。",
+              "缓存：key = 需求文本 + 约 1km 精度视野，24 小时内直接复用，热门问题零配额、秒回。",
+              "暂存：推荐结果写 localStorage，强制刷新后自动恢复文字 + 高亮 + 路线。",
+              "降级路径：模型失败时仍保留上次结果与季节入口，页面不出现空白区。"] },
     { no: "S7", type: "feature", anchor: "#privatePanel", side: "right", title: "私人地图 · 协作与分享",
-      lines: ["多主题地图 + 收藏多图选择器（可当场新建，重复收藏有提示）。",
-              "多人协作：按用户名/昵称添加，撞名自动出候选；权限分级，协作者不能删图/分享/管理成员。",
-              "只读分享：令牌链接仅暴露地图名与点位，撤销即失效；删除为软删除，回收站 30 天可恢复。",
+      lines: ["多地图：/api/maps 增删改查，owner / editor 两种角色，列表含协作地图。",
+              "收藏：卡片「⋯」→ 多图选择器（可当场新建），重复收藏有提示，卡片显示「已收藏 ✓」。",
+              "协作：按用户名/昵称添加，撞名自动出候选；协作者可编辑点位，但不能删图/分享/管理成员。",
+              "分享与回收站：16 字节令牌生成只读链接，撤销即失效；删除为软删除，30 天内可恢复。",
               "AI 建图：输入主题，AI 从已上线点位中挑 2–8 个自动建图。"] },
     { no: "S7", type: "tech", anchor: "#privatePanel", side: "left", title: "分享令牌的安全设计",
-      lines: ["分享链接由 16 字节随机令牌生成（crypto.getRandomValues），取消分享令牌立即失效。",
+      lines: ["令牌：crypto.getRandomValues(16) 生成 32 位十六进制；取消分享清空令牌，链接立即失效。",
               "只读接口只返回地图名与点位清单，不含任何个人信息；协作者接口一律不返回 username。",
-              "删除采用软删除 + 30 天过期自动清理，误删可恢复。"] },
+              "软删除：deleted_at 标记，读取回收站时顺带清理超过 30 天的记录。",
+              "权限在服务端逐接口校验（主人/协作者），不依赖前端隐藏按钮。"] },
     { no: "S8", type: "feature", anchor: "#emergencyButton", side: "left", title: "应急地图 · 一键求助",
-      lines: ["一键定位附近 3 公里的警察局/医院/消防/避难所，彩色标记 + 直接导航。",
-              "求救信息自动附带定位链接，可复制发送；110/120/119 一键拨号。",
-              "隐私自持：紧急联系人只存本机不上传；应急分类刻意用高饱和安全色，与日常内容色系区分。"] }
+      lines: ["定位与检索：AMap.Geolocation 取当前位置，半径 3 公里内检索警察局/医院/消防/避难所四类设施。",
+              "展示：高饱和安全色标记 + 距离 + 一键导航，结果列表与地图联动。",
+              "求助：sosText 自动附带定位链接，可复制发送；110/120/119 用 tel: 一键拨号。",
+              "隐私：紧急联系人只存本机 localStorage，不上传服务器。"] }
   ];
 
   const ADMIN_ANNOTATIONS = [
@@ -240,19 +254,31 @@ a.rs-btn { text-decoration: none; display: inline-flex; align-items: center; }
 .rs-member .rs-mid { font-size: 12px; color: #6b7280; margin-left: 8px; font-variant-numeric: tabular-nums; }
 .rs-member .rs-mrole { margin-top: 6px; font-size: 13.5px; color: #374151; line-height: 1.65; }
 .rs-member .rs-mrole b { color: #15803d; }
-.rs-insp { background: #F4F3ED; border: 1px solid #DCE1D9; border-radius: 18px; max-width: 900px; width: 92vw; max-height: 88vh; overflow: auto; padding: 30px 36px 22px; }
+.rs-insp { background: #F4F3ED; border: 1px solid #DCE1D9; border-radius: 18px; max-width: 1000px; width: 94vw; max-height: 88vh; overflow: auto; padding: 26px 34px 18px; }
 .rs-insp .rs-eyebrow { color: #6b7f76; letter-spacing: .35em; font-size: 12.5px; font-weight: 700; margin: 0 0 8px; }
-.rs-insp h3 { margin: 0 0 10px; font-family: "Noto Serif SC","PingFang SC",serif; font-size: 32px; color: #1f3d33; letter-spacing: 1px; }
-.rs-insp-sub { color: #5c6b62; font-size: 15.5px; line-height: 1.8; margin: 0 0 16px; }
-.rs-insp-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
-.rs-insp-chips span { background: #E7EDE4; color: #2f6d5a; font-weight: 700; font-size: 14px; padding: 6px 14px; border-radius: 8px; }
+.rs-insp h3 { margin: 0 0 12px; font-family: "Noto Serif SC","PingFang SC",serif; font-size: 34px; color: #1f3d33; letter-spacing: 1px; }
+.rs-insp-sub { color: #5c6b62; font-size: 16.5px; line-height: 1.75; margin: 0 0 10px; }
+.rs-insp-origin { color: #3f4f45; font-size: 16.5px; line-height: 1.8; margin: 0 0 12px; }
+.rs-insp-quote-line { margin: 0 0 10px; padding-left: 12px; border-left: 3px solid #d9c9a6; color: #46564b; font-size: 16px; line-height: 1.8; font-weight: 600; }
+.rs-insp-soil { margin: 0 0 12px; color: #7d8d83; font-size: 15px; line-height: 1.8; }
+.rs-insp-top { display: grid; grid-template-columns: 1fr 414px; gap: 24px; align-items: center; margin-bottom: 16px; }
+@media (max-width: 820px) { .rs-insp-top { grid-template-columns: 1fr; } }
+.rs-insp-figure { margin: 0; }
+.rs-insp-figure img { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid #d8ddd2; box-shadow: 0 6px 18px rgba(31,61,51,.12); }
+img.rs-insp-map { cursor: zoom-in; transition: transform .15s ease, box-shadow .15s ease; }
+img.rs-insp-map:hover { transform: scale(1.012); box-shadow: 0 10px 26px rgba(31,61,51,.2); }
+.rs-zoom { position: fixed; inset: 0; z-index: 100004; background: rgba(17,24,39,.88); display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+.rs-zoom img { max-width: 94vw; max-height: 90vh; border-radius: 10px; box-shadow: 0 24px 70px rgba(0,0,0,.55); }
+.rs-insp-figure figcaption { margin-top: 7px; font-size: 11.5px; color: #8a9a8f; text-align: center; letter-spacing: .5px; }
+.rs-insp-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.rs-insp-chips span { background: #E7EDE4; color: #2f6d5a; font-weight: 700; font-size: 15px; padding: 6px 15px; border-radius: 8px; }
 .rs-insp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 @media (max-width: 760px) { .rs-insp-grid { grid-template-columns: 1fr; } }
-.rs-insp-card { background: rgba(255,255,255,.6); border: 1px solid #dfe4d8; border-radius: 12px; padding: 16px; }
-.rs-insp-num { display: block; color: #C96F5E; font-weight: 800; font-size: 15px; letter-spacing: 1.5px; margin-bottom: 6px; }
-.rs-insp-card b { display: block; font-size: 17px; color: #1f3d33; margin-bottom: 6px; }
-.rs-insp-card p { margin: 0; font-size: 14px; color: #5c6b62; line-height: 1.75; }
-.rs-insp-final { margin-top: 16px; background: #DCE8DC; border-left: 4px solid #2f6d5a; border-radius: 8px; padding: 14px 18px; color: #1f3d33; font-size: 16px; font-weight: 700; line-height: 1.8; }
+.rs-insp-card { background: rgba(255,255,255,.6); border: 1px solid #dfe4d8; border-radius: 12px; padding: 16px 17px 15px; }
+.rs-insp-num { display: block; color: #C96F5E; font-weight: 800; font-size: 15.5px; letter-spacing: 1.5px; margin-bottom: 6px; }
+.rs-insp-card b { display: block; font-size: 18.5px; color: #1f3d33; margin-bottom: 6px; }
+.rs-insp-card p { margin: 0; font-size: 15.5px; color: #5c6b62; line-height: 1.72; }
+.rs-insp-final { margin-top: 14px; background: #DCE8DC; border-left: 4px solid #2f6d5a; border-radius: 8px; padding: 13px 18px; color: #1f3d33; font-size: 17.5px; font-weight: 700; line-height: 1.8; }
 .rs-insp-foot { margin-top: 12px; color: #a5b0a6; font-size: 11.5px; }
 .rs-now { background: #F4F3ED; border: 1px solid #DCE1D9; border-radius: 18px; max-width: 1020px; width: 94vw; max-height: 88vh; overflow: auto; padding: 32px 38px 22px; }
 .rs-now .rs-eyebrow { color: #6b7f76; letter-spacing: .35em; font-size: 13.5px; font-weight: 700; margin: 0 0 8px; }
@@ -777,8 +803,19 @@ a.rs-btn { text-decoration: none; display: inline-flex; align-items: center; }
       <button class="rs-close-x">✕</button>
       <p class="rs-eyebrow">INSPIRATION</p>
       <h3>灵感来源 · 三个社会痛点</h3>
-      <p class="rs-insp-sub">本地好去处散在聊天记录、短视频评论和个人收藏里——能看见，却留不住。</p>
-      <div class="rs-insp-chips"><span>聊天记录</span><span>短视频评论</span><span>个人收藏</span></div>
+      <div class="rs-insp-top">
+        <div>
+          <p class="rs-insp-sub">本地好去处散在聊天记录、短视频评论和个人收藏里——能看见，却留不住。</p>
+          <p class="rs-insp-origin">最初的想法来自当助班的那段日子：想把自己摸出来的吃喝玩乐分享给刚入学的新同学，也希望他们接着往下更新——一张能长大的地图。</p>
+          <p class="rs-insp-quote-line">真正有价值的，不是一份静态的商家名单，而是一张由大家共同补充、核验和使用的生活地图。</p>
+          <p class="rs-insp-soil">清远恰好提供了这样的土壤：山水景观、地方美食、商业设施、校园与公共服务资源，丰富而分散。</p>
+          <div class="rs-insp-chips"><span>聊天记录</span><span>短视频评论</span><span>个人收藏</span></div>
+        </div>
+        <figure class="rs-insp-figure">
+          <img class="rs-insp-map" src="assets/first-map-v1.jpg" alt="2025 年 8 月第一版清远社区地图（易制地图手工标注）">
+          <figcaption>2025.08 · 第一版地图（易制地图手工标注）· 点击图片放大</figcaption>
+        </figure>
+      </div>
       <div class="rs-insp-grid">
         <div class="rs-insp-card"><span class="rs-insp-num">01</span><b>怎么集中呈现</b><p>分散的信息无法按位置和类别组织，找起来只能靠翻记录、碰运气。</p></div>
         <div class="rs-insp-card"><span class="rs-insp-num">02</span><b>怎么低门槛维护</b><p>平台地图只读，居民经验写不进去；写进去的也没人核验、没人纠偏。</p></div>
@@ -790,6 +827,24 @@ a.rs-btn { text-decoration: none; display: inline-flex; align-items: center; }
     bd.addEventListener("click", (ev) => { if (ev.target === bd) bd.remove(); });
     bd.querySelector(".rs-close-x").addEventListener("click", () => bd.remove());
     document.body.appendChild(bd);
+    // 第一版地图：点击放大查看（再点任意处或 Esc 关闭）
+    const mapImg = bd.querySelector(".rs-insp-map");
+    if (mapImg) {
+      mapImg.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const zoom = document.createElement("div");
+        zoom.className = "rs-zoom";
+        const big = document.createElement("img");
+        big.src = mapImg.src;
+        big.alt = mapImg.alt;
+        zoom.appendChild(big);
+        const close = () => { zoom.remove(); document.removeEventListener("keydown", onKey); };
+        const onKey = (e) => { if (e.key === "Escape") close(); };
+        zoom.addEventListener("click", close);
+        document.addEventListener("keydown", onKey);
+        document.body.appendChild(zoom);
+      });
+    }
   }
   dock.querySelector("#rsInspBtn").addEventListener("click", openInsp);
 

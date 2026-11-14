@@ -254,6 +254,14 @@ button { cursor: pointer; }
 .private-panel .trash-toggle { max-width: none; margin: 16px 0 0; display: block; width: auto; }
 .private-panel .private-map-detail { max-width: none; margin: 0; }
 
+/* ---------------- 手机端列表操作区：搜索框白胶囊与入口链接同行对齐（末尾权威规则，覆盖多层断点） ---------------- */
+@media (max-width: 820px) {
+  .list-actions { flex: none; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+  .list-actions .text-button { display: inline-flex; }
+  .search-box { width: auto; flex: 1 1 150px; min-width: 140px; border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; background: #fff; }
+  .search-box input { padding: 4px 0; font-size: 12px; }
+}
+
 /* ---------------- 苹果风组件刷新（叠加覆盖，统一圆角/阴影/交互质感） ----------------
    注意：.marker-pin 旧规则（长行内）已被末尾新体系覆盖，勿在此处重复定义 */
 .spot-card { border-radius: var(--radius-m); box-shadow: var(--shadow); border-color: transparent; }
