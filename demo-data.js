@@ -62,7 +62,7 @@
   ];
 
   /* ---------------- 存取 ---------------- */
-  // 种子来源优先级：线上快照（remote-seed.js，由 tools/fetch_remote_data.mjs 只读抓取）> 内置演示数据
+  // 种子来源优先级：线上快照（remote-seed.js，由 compete/本地路演/fetch_remote_data.mjs 只读抓取）> 内置演示数据
   function dataSourceMarker() {
     const seed = window.QY_REMOTE_SEED;
     return seed && Array.isArray(seed.spots) && seed.spots.length ? `remote:${seed.fetched_at}` : "builtin";

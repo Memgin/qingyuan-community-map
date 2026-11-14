@@ -10,15 +10,7 @@
 
 ## 界面预览
 
-| 首屏 | AI 向导 · Lumina | 详情面板 |
-| :---: | :---: | :---: |
-| ![首屏](docs/screenshots/01-首屏.png) | ![AI 向导](docs/screenshots/04-AI向导.png) | ![详情面板](docs/screenshots/05-详情面板.png) |
-
-| 主地图 · 路线编辑 | 最近加入 | 应急地图 |
-| :---: | :---: | :---: |
-| ![路线编辑](docs/screenshots/08-路线编辑器.png) | ![详情](docs/screenshots/02-地图.png) | ![应急](docs/screenshots/06-应急地图.png) |
-
-> 预览截图为 390×844 iPhone 视口，可在 `预览-iPhone/`（本地）查看全套。
+![首屏 · LOCAL/01 品牌区 + 主地图 + 热门地点](docs/screenshots/desktop-home.png)
 
 ## 目录
 

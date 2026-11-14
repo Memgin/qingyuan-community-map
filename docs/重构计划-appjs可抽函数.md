@@ -124,7 +124,7 @@ function addRouteMarkers(mapInstance, spots, { color = "#2F80ED", weight = 5 } =
 
 ## 回归验证清单（重构完成后必做）
 
-1. 本地 `tools/启动本地服务.bat` → `index.html?demoRoute=1` 小地图正常
+1. 本地 `compete/本地路演/启动本地服务.bat` → `index.html?demoRoute=1` 小地图正常
 2. 登录 / 退出 / 强制改密流程
 3. 收藏（单图直收 / 多图选择器 / 新建并收藏 / 已收藏 ✓）
 4. 地图详情：改名保存、移除点位、顺路规划、分享链接复制、取消分享、删除→回收站→恢复→彻底删除
